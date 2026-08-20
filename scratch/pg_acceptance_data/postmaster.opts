@@ -1,0 +1,1 @@
+D:/Apps/QLCV/node_modules/@embedded-postgres/windows-x64/native/bin/postgres.exe "-D" "D:\Apps\QLCV\scratch\pg_acceptance_data" "-p" "54332"
