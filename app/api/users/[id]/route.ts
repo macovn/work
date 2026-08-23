@@ -14,9 +14,24 @@ export async function PATCH(
 
     const userId = params.id;
     const body = await request.json();
-    const { fullName, role, status, password } = body;
+    const { email, fullName, role, status, password } = body;
 
     const data: any = {};
+
+    if (email && typeof email === "string" && email.trim()) {
+      const cleanEmail = email.trim().toLowerCase();
+      const existingUser = await prisma.user.findFirst({
+        where: {
+          email: cleanEmail,
+          NOT: { id: userId },
+        },
+      });
+      if (existingUser) {
+        return NextResponse.json({ error: "Email này đã được sử dụng bởi tài khoản khác" }, { status: 400 });
+      }
+      data.email = cleanEmail;
+    }
+
     if (fullName) data.fullName = fullName.trim();
     if (role && (role === "ADMIN" || role === "USER")) data.role = role;
     if (status && (status === "ACTIVE" || status === "LOCKED")) data.status = status;

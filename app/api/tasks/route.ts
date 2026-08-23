@@ -23,8 +23,9 @@ export async function GET(request: Request) {
     const endDate = searchParams.get("endDate");
     const search = searchParams.get("search");
 
-    const page = parseInt(searchParams.get("page") || "1", 10);
-    const limit = parseInt(searchParams.get("limit") || "10", 10);
+    const page = Math.max(parseInt(searchParams.get("page") || "1", 10), 1);
+    const parsedLimit = parseInt(searchParams.get("limit") || "10", 10);
+    const limit = [10, 50, 100].includes(parsedLimit) ? parsedLimit : (isNaN(parsedLimit) || parsedLimit <= 0 ? 10 : Math.min(parsedLimit, 100));
     const skip = (page - 1) * limit;
 
     const where: any = {};
@@ -62,6 +63,9 @@ export async function GET(request: Request) {
         where,
         include: {
           assignee: {
+            select: { id: true, fullName: true, email: true },
+          },
+          kpiEvaluator: {
             select: { id: true, fullName: true, email: true },
           },
         },

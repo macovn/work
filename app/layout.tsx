@@ -4,6 +4,8 @@ import { Navbar } from "@/components/Navbar";
 import { Sidebar } from "@/components/Sidebar";
 import { Providers } from "./providers";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Quản Lý Công Việc V1.2",
   description: "Hệ thống quản lý công việc nhóm chuyên nghiệp",
@@ -25,7 +27,7 @@ export default async function RootLayout({
               <Navbar user={user} />
               <div className="flex flex-1">
                 <Sidebar role={user.role} />
-                <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+                <main className="flex-1 p-4 sm:p-6 lg:p-8 w-full min-w-0">
                   {children}
                 </main>
               </div>

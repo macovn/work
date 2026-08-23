@@ -55,27 +55,32 @@ export async function removeAuthCookie() {
 }
 
 export async function getCurrentUser() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(TOKEN_COOKIE_NAME)?.value;
-  if (!token) return null;
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get(TOKEN_COOKIE_NAME)?.value;
+    if (!token) return null;
 
-  const payload = verifyToken(token);
-  if (!payload) return null;
+    const payload = verifyToken(token);
+    if (!payload) return null;
 
-  const user = await prisma.user.findUnique({
-    where: { id: payload.userId },
-    select: {
-      id: true,
-      email: true,
-      fullName: true,
-      role: true,
-      status: true,
-    },
-  });
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        role: true,
+        status: true,
+      },
+    });
 
-  if (!user || user.status === "LOCKED") {
+    if (!user || user.status === "LOCKED") {
+      return null;
+    }
+
+    return user;
+  } catch (error) {
+    console.error("[getCurrentUser Error]:", error);
     return null;
   }
-
-  return user;
 }

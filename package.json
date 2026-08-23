@@ -3,7 +3,7 @@
   "version": "1.2.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "tsx serve_app.ts",
     "build": "prisma generate && next build",
     "start": "next start",
     "db:push": "prisma db push",

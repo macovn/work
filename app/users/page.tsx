@@ -108,6 +108,7 @@ export default function UsersPage() {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            email: formData.email,
             fullName: formData.fullName,
             role: formData.role,
             status: formData.status,
@@ -233,18 +234,16 @@ export default function UsersPage() {
             {error && <div className="p-3 bg-red-50 text-red-700 text-xs font-semibold rounded-xl">{error}</div>}
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-              {!editingUser && (
-                <div>
-                  <label className="block font-bold text-gray-700 mb-1">Email *</label>
-                  <input
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl"
-                  />
-                </div>
-              )}
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Email *</label>
+                <input
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl"
+                />
+              </div>
 
               <div>
                 <label className="block font-bold text-gray-700 mb-1">Họ và tên *</label>

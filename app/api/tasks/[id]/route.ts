@@ -39,6 +39,14 @@ export async function PATCH(
           ...(result !== undefined && { result }),
           ...(notes !== undefined && { notes }),
         },
+        include: {
+          assignee: {
+            select: { id: true, fullName: true, email: true },
+          },
+          kpiEvaluator: {
+            select: { id: true, fullName: true, email: true },
+          },
+        },
       });
 
       if (updatedTask.googleEventId) {
@@ -71,6 +79,14 @@ export async function PATCH(
         ...(status && { status }),
         ...(result !== undefined && { result }),
         ...(notes !== undefined && { notes }),
+      },
+      include: {
+        assignee: {
+          select: { id: true, fullName: true, email: true },
+        },
+        kpiEvaluator: {
+          select: { id: true, fullName: true, email: true },
+        },
       },
     });
 

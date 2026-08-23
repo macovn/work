@@ -25,7 +25,7 @@ export function Sidebar({ role = "USER" }: SidebarProps) {
     { label: "Lịch deadline", href: "/calendar", icon: Calendar, adminOnly: false },
     { label: "Nhân sự", href: "/users", icon: Users, adminOnly: true },
     { label: "Báo cáo & Export", href: "/reports", icon: BarChart3, adminOnly: true },
-    { label: "Thông báo & Log", href: "/notifications", icon: Bell, adminOnly: false },
+    { label: "Nhắc việc - cảnh báo", href: "/notifications", icon: Bell, adminOnly: false },
     { label: "Cấu hình", href: "/settings", icon: Settings, adminOnly: true },
   ];
 

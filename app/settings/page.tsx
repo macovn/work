@@ -65,7 +65,7 @@ export default function SettingsPage() {
   };
 
   const handleSeedData = async () => {
-    if (!window.confirm("Create or refresh the 100 demo tasks? Existing demo records will be updated.")) return;
+    if (!window.confirm("Tạo hoặc làm mới 100 công việc mẫu?")) return;
 
     setSeeding(true);
     setMessage("");
@@ -73,10 +73,28 @@ export default function SettingsPage() {
     try {
       const res = await fetch("/api/seed", { method: "POST" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Unable to create demo data");
-      setMessage("Demo data is ready: 100 tasks have been created or refreshed.");
+      if (!res.ok) throw new Error(data.error || "Không thể tạo dữ liệu mẫu");
+      setMessage("Dữ liệu mẫu đã sẵn sàng: 100 công việc đã được khởi tạo.");
     } catch (err: any) {
-      setError(err.message || "Unable to create demo data");
+      setError(err.message || "Lỗi khi tạo dữ liệu mẫu");
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const handleClearData = async () => {
+    if (!window.confirm("Bạn có chắc chắn muốn XÓA TẤT CẢ công việc trong hệ thống?")) return;
+
+    setSeeding(true);
+    setMessage("");
+    setError("");
+    try {
+      const res = await fetch("/api/seed", { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Lỗi khi xóa dữ liệu mẫu");
+      setMessage(data.message || "Đã xóa toàn bộ công việc thành công!");
+    } catch (err: any) {
+      setError(err.message || "Lỗi khi xóa dữ liệu");
     } finally {
       setSeeding(false);
     }
@@ -259,14 +277,24 @@ export default function SettingsPage() {
           <p className="text-xs text-gray-500">
             Tạo hoặc làm mới 100 công việc mẫu để kiểm thử hệ thống. Chỉ quản trị viên có thể thực hiện thao tác này.
           </p>
-          <button
-            type="button"
-            onClick={handleSeedData}
-            disabled={seeding}
-            className="px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm rounded-xl disabled:opacity-50"
-          >
-            {seeding ? "Đang tạo dữ liệu mẫu..." : "Tạo dữ liệu mẫu"}
-          </button>
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              type="button"
+              onClick={handleSeedData}
+              disabled={seeding}
+              className="px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm rounded-xl disabled:opacity-50"
+            >
+              {seeding ? "Đang xử lý..." : "Tạo 100 dữ liệu mẫu"}
+            </button>
+            <button
+              type="button"
+              onClick={handleClearData}
+              disabled={seeding}
+              className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-xl disabled:opacity-50"
+            >
+              {seeding ? "Đang xử lý..." : "Xóa tất cả công việc"}
+            </button>
+          </div>
         </section>
 
         <div className="flex justify-end">

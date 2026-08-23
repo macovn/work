@@ -30,6 +30,10 @@ export default function LoginPage() {
         return;
       }
 
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("justLoggedIn", "true");
+      }
+
       router.push("/dashboard");
       router.refresh();
     } catch (err: any) {
