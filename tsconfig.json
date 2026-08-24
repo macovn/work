@@ -23,5 +23,5 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "scratch_test_*.ts"]
+  "exclude": ["node_modules", "scratch", "scratch_test_*.ts", "run_*.ts", "serve_*.ts", "start_*.ts"]
 }
