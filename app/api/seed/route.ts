@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { runSeed } from "@/prisma/seed";
 import { getCurrentUser } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 export async function POST() {
   try {
     const user = await getCurrentUser();

@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import Link from "next/link";
+
+export const dynamic = "force-dynamic";
 import {
   CheckSquare,
   AlertTriangle,
