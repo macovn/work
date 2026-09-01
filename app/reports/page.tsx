@@ -18,8 +18,11 @@ import {
   Search,
   Filter,
   Users,
+  Award,
+  TrendingUp,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
+import { calculateEvaluation, EvaluationResult } from "@/lib/evaluation";
 
 interface TaskItem {
   id: string;
@@ -35,6 +38,9 @@ interface TaskItem {
   notes?: string | null;
   updatedAt: string;
   kpiScore?: number | null;
+  assignedScore?: number | null;
+  completedScore?: number | null;
+  completionRate?: number | null;
 }
 
 interface UserItem {
@@ -249,6 +255,21 @@ export default function ReportsPage() {
     };
   }, [filteredTasks]);
 
+  // Overall Evaluation (Work Order Spec)
+  const overallEvaluation: EvaluationResult = useMemo(() => {
+    return calculateEvaluation(
+      filteredTasks.map((t) => ({
+        id: t.id,
+        code: t.code,
+        title: t.title,
+        assignedScore: t.assignedScore,
+        completedScore: t.completedScore,
+        kpiScore: t.kpiScore,
+        status: t.status,
+      }))
+    );
+  }, [filteredTasks]);
+
   // Employee Aggregation Report
   const employeeReport = useMemo(() => {
     const map: Record<
@@ -260,8 +281,7 @@ export default function ReportsPage() {
         inProgress: number;
         overdue: number;
         completedOnTime: number;
-        kpiScoresSum: number;
-        kpiEvaluatedCount: number;
+        tasks: TaskItem[];
       }
     > = {};
 
@@ -273,8 +293,7 @@ export default function ReportsPage() {
         inProgress: 0,
         overdue: 0,
         completedOnTime: 0,
-        kpiScoresSum: 0,
-        kpiEvaluatedCount: 0,
+        tasks: [],
       };
     });
 
@@ -290,13 +309,14 @@ export default function ReportsPage() {
           inProgress: 0,
           overdue: 0,
           completedOnTime: 0,
-          kpiScoresSum: 0,
-          kpiEvaluatedCount: 0,
+          tasks: [],
         };
       }
 
       const emp = map[t.assigneeId];
       emp.total++;
+      emp.tasks.push(t);
+
       if (t.status === "COMPLETED") {
         emp.completed++;
         if (new Date(t.updatedAt) <= new Date(t.deadline)) {
@@ -309,24 +329,29 @@ export default function ReportsPage() {
       if (t.status !== "COMPLETED" && t.status !== "CANCELLED" && new Date(t.deadline) < startOfToday) {
         emp.overdue++;
       }
-
-      if (t.kpiScore !== undefined && t.kpiScore !== null) {
-        emp.kpiScoresSum += t.kpiScore;
-        emp.kpiEvaluatedCount++;
-      }
     });
 
     return Object.values(map)
       .map((emp) => {
         const completionRate = emp.total > 0 ? Math.round((emp.completed / emp.total) * 100) : 0;
         const onTimeRate = emp.completed > 0 ? Math.round((emp.completedOnTime / emp.completed) * 100) : 0;
-        const avgKpi =
-          emp.kpiEvaluatedCount > 0 ? Math.round(emp.kpiScoresSum / emp.kpiEvaluatedCount) : null;
+        const evaluation = calculateEvaluation(
+          emp.tasks.map((t) => ({
+            id: t.id,
+            code: t.code,
+            title: t.title,
+            assignedScore: t.assignedScore,
+            completedScore: t.completedScore,
+            kpiScore: t.kpiScore,
+            status: t.status,
+          }))
+        );
+
         return {
           ...emp,
           completionRate,
           onTimeRate,
-          avgKpi,
+          evaluation,
         };
       })
       .filter((emp) => {
@@ -538,6 +563,111 @@ export default function ReportsPage() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* KẾT QUẢ ĐÁNH GIÁ – XẾP LOẠI (WORK ORDER SPEC) */}
+      <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-2xl border border-indigo-100 shadow-2xs">
+              <Award className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-black text-gray-900 tracking-tight">
+                KẾT QUẢ ĐÁNH GIÁ – XẾP LOẠI
+              </h2>
+              <p className="text-xs text-gray-500 font-medium">
+                Áp dụng công thức: Tổng điểm = Điểm TB theo trọng số × KPI trung bình (%)
+              </p>
+            </div>
+          </div>
+          {overallEvaluation.hasEnoughData && (
+            <span className="text-xs font-bold text-gray-600 bg-gray-50 px-3.5 py-1.5 rounded-xl border border-gray-200">
+              Tổng hợp: {overallEvaluation.validScoreCount} điểm nhiệm vụ &bull; {overallEvaluation.validKpiCount} KPI hợp lệ
+            </span>
+          )}
+        </div>
+
+        {overallEvaluation.hasEnoughData ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
+            {/* 1. Điểm TB theo trọng số */}
+            <div className="p-4 bg-gray-50/80 rounded-2xl border border-gray-200/80 flex flex-col justify-between">
+              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                Điểm TB theo trọng số
+              </span>
+              <div className="my-2 flex items-baseline gap-1.5">
+                <span className="text-3xl font-black text-gray-900">
+                  {overallEvaluation.weightedAverageScore?.toFixed(2)}
+                </span>
+                <span className="text-xs font-bold text-gray-400">điểm</span>
+              </div>
+              <p className="text-[10px] text-gray-400 font-medium">
+                Trung bình cộng các điểm đã phản ánh trọng số
+              </p>
+            </div>
+
+            {/* 2. KPI trung bình */}
+            <div className="p-4 bg-purple-50/60 rounded-2xl border border-purple-200/60 flex flex-col justify-between">
+              <span className="text-[11px] font-bold text-purple-700 uppercase tracking-wider">
+                KPI Trung Bình
+              </span>
+              <div className="my-2 flex items-baseline gap-1.5">
+                <span className="text-3xl font-black text-purple-700">
+                  {overallEvaluation.averageKpi?.toFixed(2)}%
+                </span>
+              </div>
+              <p className="text-[10px] text-purple-500 font-medium">
+                Tổng KPI % / số nhiệm vụ có KPI hợp lệ
+              </p>
+            </div>
+
+            {/* 3. TỔNG ĐIỂM */}
+            <div className="p-4 bg-blue-50/70 rounded-2xl border border-blue-200/80 flex flex-col justify-between">
+              <span className="text-[11px] font-black text-blue-700 uppercase tracking-wider">
+                TỔNG ĐIỂM
+              </span>
+              <div className="my-2 flex items-baseline gap-1.5">
+                <span className="text-3xl font-black text-blue-700">
+                  {overallEvaluation.totalScore?.toFixed(2)}
+                </span>
+                <span className="text-xs font-bold text-blue-500">điểm</span>
+              </div>
+              <p className="text-[10px] text-blue-500 font-medium font-mono">
+                {overallEvaluation.weightedAverageScore?.toFixed(2)} × {overallEvaluation.averageKpi?.toFixed(2)}%
+              </p>
+            </div>
+
+            {/* 4. XẾP LOẠI */}
+            <div className={`p-4 rounded-2xl border flex flex-col justify-between ${overallEvaluation.rating.bgColor} ${overallEvaluation.rating.borderColor}`}>
+              <span className={`text-[11px] font-black uppercase tracking-wider ${overallEvaluation.rating.textColor}`}>
+                XẾP LOẠI
+              </span>
+              <div className="my-2">
+                <span className={`inline-block px-3 py-1.5 rounded-xl font-black text-xs shadow-xs ${overallEvaluation.rating.badgeColor}`}>
+                  {overallEvaluation.rating.label}
+                </span>
+              </div>
+              <p className={`text-[10px] font-bold ${overallEvaluation.rating.textColor}`}>
+                {overallEvaluation.totalScore! >= 90
+                  ? "≥ 90.00 điểm (Xuất sắc)"
+                  : overallEvaluation.totalScore! >= 70
+                  ? "70.00 – 89.99 điểm (Tốt)"
+                  : overallEvaluation.totalScore! >= 50
+                  ? "50.00 – 69.99 điểm (Hoàn thành)"
+                  : "< 50.00 điểm (Không hoàn thành)"}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="p-6 bg-amber-50/60 border border-amber-200 rounded-2xl text-center space-y-1">
+            <p className="text-sm font-bold text-amber-800">
+              ⚠️ Chưa đủ dữ liệu để đánh giá
+            </p>
+            <p className="text-xs text-amber-600">
+              Cần có ít nhất một nhiệm vụ hoàn thành và được chấm điểm KPI để tính toán Đánh giá & Xếp loại.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* 12 METRICS CARDS SECTION (2x6 Balanced Grid) */}
@@ -901,12 +1031,12 @@ export default function ReportsPage() {
             <thead>
               <tr className="bg-gray-50/80 text-gray-600 font-bold border-y border-gray-100">
                 <th className="p-3">Nhân sự</th>
-                <th className="p-3 text-center">Tổng CV được giao</th>
-                <th className="p-3 text-center">Đã hoàn thành</th>
-                <th className="p-3 text-center">Đang thực hiện</th>
-                <th className="p-3 text-center">Quá hạn</th>
-                <th className="p-3 text-center">Tỷ lệ đúng hạn</th>
+                <th className="p-3 text-center">Tổng CV</th>
+                <th className="p-3 text-center">Hoàn thành</th>
+                <th className="p-3 text-center">Điểm TB (theo TS)</th>
                 <th className="p-3 text-center">KPI TB</th>
+                <th className="p-3 text-center">TỔNG ĐIỂM</th>
+                <th className="p-3 text-center">XẾP LOẠI</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -938,14 +1068,30 @@ export default function ReportsPage() {
                       <span className="text-[10px] text-gray-400 block font-semibold">({emp.completionRate}%)</span>
                     </td>
 
-                    <td className="p-3 text-center font-bold text-blue-600">{emp.inProgress}</td>
-
-                    <td className="p-3 text-center font-bold text-red-600">{emp.overdue}</td>
-
-                    <td className="p-3 text-center font-bold text-indigo-600">{emp.onTimeRate}%</td>
+                    <td className="p-3 text-center font-bold text-gray-800">
+                      {emp.evaluation.weightedAverageScore !== null
+                        ? emp.evaluation.weightedAverageScore.toFixed(2)
+                        : "—"}
+                    </td>
 
                     <td className="p-3 text-center font-bold text-purple-600">
-                      {emp.avgKpi !== null ? `${emp.avgKpi}%` : "Chưa chấm"}
+                      {emp.evaluation.averageKpi !== null
+                        ? `${emp.evaluation.averageKpi.toFixed(2)}%`
+                        : "Chưa chấm"}
+                    </td>
+
+                    <td className="p-3 text-center font-black text-blue-700 text-sm">
+                      {emp.evaluation.totalScore !== null
+                        ? emp.evaluation.totalScore.toFixed(2)
+                        : "—"}
+                    </td>
+
+                    <td className="p-3 text-center">
+                      <span
+                        className={`inline-block px-2.5 py-1 rounded-lg font-bold text-[10px] whitespace-nowrap shadow-2xs ${emp.evaluation.rating.badgeColor}`}
+                      >
+                        {emp.evaluation.rating.label}
+                      </span>
                     </td>
                   </tr>
                 ))

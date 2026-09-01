@@ -2,8 +2,6 @@ import { redirect } from "next/navigation";
 import { prisma, ensureTaskTypeColumn } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import Link from "next/link";
-
-export const dynamic = "force-dynamic";
 import {
   CheckSquare,
   AlertTriangle,
@@ -14,9 +12,12 @@ import {
   TrendingUp,
   AlertCircle,
   ArrowRight,
+  Award,
 } from "lucide-react";
 import { formatDate, formatPriority, formatStatus } from "@/lib/utils";
+import { calculateEvaluation, EvaluationResult } from "@/lib/evaluation";
 
+export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function DashboardPage() {
@@ -124,6 +125,20 @@ export default async function DashboardPage() {
         orderBy: { deadline: "asc" },
         take: 8,
       }),
+
+      // 8. Tasks for Evaluation
+      prisma.task.findMany({
+        where: baseWhere,
+        select: {
+          id: true,
+          code: true,
+          title: true,
+          assignedScore: true,
+          completedScore: true,
+          kpiScore: true,
+          status: true,
+        },
+      }),
     ]);
 
     totalTasks = _totalTasks;
@@ -138,6 +153,25 @@ export default async function DashboardPage() {
     console.error("[DashboardPage Data Fetch Error]:", err);
   }
 
+  let evalTasks: any[] = [];
+  try {
+    evalTasks = await prisma.task.findMany({
+      where: baseWhere,
+      select: {
+        id: true,
+        code: true,
+        title: true,
+        assignedScore: true,
+        completedScore: true,
+        kpiScore: true,
+        status: true,
+      },
+    });
+  } catch (e) {
+    console.error("[Dashboard evalTasks fetch error]:", e);
+  }
+
+  const dashboardEvaluation: EvaluationResult = calculateEvaluation(evalTasks);
   const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   const kpis = [
@@ -200,6 +234,74 @@ export default async function DashboardPage() {
         <p className="text-sm text-gray-500">
           Tổng quan tình hình thực hiện công việc {user?.role !== "ADMIN" && "(Việc được giao cho bạn)"}
         </p>
+      </div>
+
+      {/* KHỐI ĐÁNH GIÁ – XẾP LOẠI HIỆN TẠI */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+              <Award className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="font-bold text-gray-900 text-base">Đánh Giá & Xếp Loại Kết Quả</h2>
+              <p className="text-xs text-gray-500">
+                {user?.role === "ADMIN" ? "Tổng hợp toàn đơn vị theo công thức chuẩn" : "Kết quả đánh giá cá nhân của bạn"}
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/reports"
+            className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 self-start sm:self-auto"
+          >
+            Chi tiết báo cáo <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        {dashboardEvaluation.hasEnoughData ? (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div className="p-3.5 bg-gray-50/80 rounded-xl border border-gray-100">
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
+                Điểm TB (theo trọng số)
+              </span>
+              <span className="text-2xl font-black text-gray-900 mt-1 block">
+                {dashboardEvaluation.weightedAverageScore?.toFixed(2)}
+              </span>
+            </div>
+
+            <div className="p-3.5 bg-purple-50/60 rounded-xl border border-purple-100">
+              <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block">
+                KPI Trung Bình
+              </span>
+              <span className="text-2xl font-black text-purple-700 mt-1 block">
+                {dashboardEvaluation.averageKpi?.toFixed(2)}%
+              </span>
+            </div>
+
+            <div className="p-3.5 bg-blue-50/70 rounded-xl border border-blue-100">
+              <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">
+                TỔNG ĐIỂM
+              </span>
+              <span className="text-2xl font-black text-blue-700 mt-1 block">
+                {dashboardEvaluation.totalScore?.toFixed(2)}
+              </span>
+            </div>
+
+            <div className={`p-3.5 rounded-xl border flex flex-col justify-center ${dashboardEvaluation.rating.bgColor} ${dashboardEvaluation.rating.borderColor}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-wider block ${dashboardEvaluation.rating.textColor}`}>
+                XẾP LOẠI
+              </span>
+              <span className={`inline-block mt-1 px-2.5 py-1 rounded-lg font-bold text-xs shadow-2xs ${dashboardEvaluation.rating.badgeColor}`}>
+                {dashboardEvaluation.rating.label}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="p-4 bg-gray-50 border border-gray-200/80 rounded-xl text-xs text-gray-500 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-gray-400 shrink-0" />
+            <span>Chưa đủ dữ liệu để đánh giá (cần có ít nhất 1 nhiệm vụ hoàn thành có điểm KPI).</span>
+          </div>
+        )}
       </div>
 
       {/* 7 KPI Cards Grid */}
