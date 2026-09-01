@@ -22,3 +22,22 @@ export const prisma =
   });
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+
+let isSchemaEnsured = false;
+
+export async function ensureTaskTypeColumn() {
+  if (isSchemaEnsured) return;
+  try {
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TaskType') THEN
+          CREATE TYPE "TaskType" AS ENUM ('RECURRING', 'AD_HOC');
+        END IF;
+      END $$;
+      ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "taskType" "TaskType" NOT NULL DEFAULT 'RECURRING';
+    `);
+    isSchemaEnsured = true;
+  } catch (err) {
+    console.error("[ensureTaskTypeColumn Error]:", err);
+  }
+}
