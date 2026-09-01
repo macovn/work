@@ -25,7 +25,7 @@ if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 let isSchemaEnsured = false;
 
-export async function ensureTaskTypeColumn() {
+export async function ensureStandardTaskSchema() {
   if (isSchemaEnsured) return;
   try {
     await prisma.$executeRawUnsafe(`
@@ -35,9 +35,78 @@ export async function ensureTaskTypeColumn() {
         END IF;
       END $$;
       ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "taskType" "TaskType" NOT NULL DEFAULT 'RECURRING';
+
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ComplexityLevel') THEN
+          CREATE TYPE "ComplexityLevel" AS ENUM ('N1', 'N2', 'N3', 'N4', 'N5');
+        END IF;
+      END $$;
+
+      CREATE TABLE IF NOT EXISTS "JobPosition" (
+        "id" TEXT NOT NULL,
+        "code" TEXT NOT NULL,
+        "name" TEXT NOT NULL,
+        "description" TEXT,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "order" INTEGER NOT NULL DEFAULT 0,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "JobPosition_pkey" PRIMARY KEY ("id")
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS "JobPosition_code_key" ON "JobPosition"("code");
+
+      CREATE TABLE IF NOT EXISTS "JobTaskGroup" (
+        "id" TEXT NOT NULL,
+        "positionId" TEXT NOT NULL,
+        "code" TEXT NOT NULL,
+        "name" TEXT NOT NULL,
+        "weight" DOUBLE PRECISION NOT NULL DEFAULT 100.0,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "order" INTEGER NOT NULL DEFAULT 0,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "JobTaskGroup_pkey" PRIMARY KEY ("id"),
+        CONSTRAINT "JobTaskGroup_positionId_fkey" FOREIGN KEY ("positionId") REFERENCES "JobPosition"("id") ON DELETE CASCADE ON UPDATE CASCADE
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS "JobTaskGroup_positionId_code_key" ON "JobTaskGroup"("positionId", "code");
+
+      CREATE TABLE IF NOT EXISTS "StandardTask" (
+        "id" TEXT NOT NULL,
+        "positionId" TEXT NOT NULL,
+        "groupId" TEXT NOT NULL,
+        "code" TEXT NOT NULL,
+        "name" TEXT NOT NULL,
+        "unit" TEXT NOT NULL,
+        "benchmarkScore" DOUBLE PRECISION NOT NULL,
+        "complexityLevel" "ComplexityLevel" NOT NULL,
+        "conversionFactor" DOUBLE PRECISION NOT NULL,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "order" INTEGER NOT NULL DEFAULT 0,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "StandardTask_pkey" PRIMARY KEY ("id"),
+        CONSTRAINT "StandardTask_positionId_fkey" FOREIGN KEY ("positionId") REFERENCES "JobPosition"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+        CONSTRAINT "StandardTask_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "JobTaskGroup"("id") ON DELETE CASCADE ON UPDATE CASCADE
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS "StandardTask_code_key" ON "StandardTask"("code");
+
+      ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "positionId" TEXT;
+      ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "groupId" TEXT;
+      ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "standardTaskId" TEXT;
+      ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "unit" TEXT;
+      ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "benchmarkScore" DOUBLE PRECISION;
+      ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "complexityLevel" "ComplexityLevel";
+      ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "conversionFactor" DOUBLE PRECISION;
+      ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "assignedVolume" DOUBLE PRECISION;
+      ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "completedVolume" DOUBLE PRECISION;
+      ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "assignedScore" DOUBLE PRECISION;
+      ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "completedScore" DOUBLE PRECISION;
+      ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "completionRate" DOUBLE PRECISION;
     `);
     isSchemaEnsured = true;
   } catch (err) {
-    console.error("[ensureTaskTypeColumn Error]:", err);
+    console.error("[ensureStandardTaskSchema Error]:", err);
   }
 }
+
+export const ensureTaskTypeColumn = ensureStandardTaskSchema;

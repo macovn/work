@@ -56,6 +56,14 @@ enum TaskType {
   AD_HOC    // Đột xuất
 }
 
+enum ComplexityLevel {
+  N1 // Hệ số 1.00
+  N2 // Hệ số 1.25
+  N3 // Hệ số 1.50
+  N4 // Hệ số 2.00
+  N5 // Hệ số 2.50
+}
+
 model User {
   id               String            @id @default(uuid())
   email            String            @unique
@@ -70,6 +78,56 @@ model User {
   logs             NotificationLog[]
   inAppAlerts      InAppNotification[]
   pushSubscriptions PushSubscription[]
+}
+
+model JobPosition {
+  id            String         @id @default(uuid())
+  code          String         @unique // e.g. "VT-DAN-SO"
+  name          String         // e.g. "Dân số"
+  description   String?
+  isActive      Boolean        @default(true)
+  order         Int            @default(0)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  groups        JobTaskGroup[]
+  standardTasks StandardTask[]
+  tasks         Task[]
+}
+
+model JobTaskGroup {
+  id            String         @id @default(uuid())
+  positionId    String
+  position      JobPosition    @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  code          String         // e.g. "GRP-01"
+  name          String         // Tên nhóm công việc
+  weight        Float          @default(100.0) // Trọng số nhóm (%)
+  isActive      Boolean        @default(true)
+  order         Int            @default(0)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  standardTasks StandardTask[]
+  tasks         Task[]
+
+  @@unique([positionId, code])
+}
+
+model StandardTask {
+  id               String          @id @default(uuid())
+  positionId       String
+  position         JobPosition     @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  groupId          String
+  group            JobTaskGroup    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  code             String          @unique // e.g. "DS-01"
+  name             String          // Tên sản phẩm / công việc chuẩn
+  unit             String          // Đơn vị tính (ĐVT)
+  benchmarkScore   Float           // Điểm chuẩn
+  complexityLevel  ComplexityLevel // Mức độ phức tạp N1-N5
+  conversionFactor Float           // Hệ số quy đổi (1.00, 1.25, 1.50, 2.00, 2.50)
+  isActive         Boolean         @default(true)
+  order            Int             @default(0)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  tasks            Task[]
 }
 
 model Task {
@@ -87,6 +145,23 @@ model Task {
   notes          String?           // Ghi chú
   googleEventId  String?           // ID event Google Calendar tương ứng
   
+  // Standard Task Catalog & Score Snapshot Fields
+  positionId       String?
+  position         JobPosition?    @relation(fields: [positionId], references: [id], onDelete: SetNull)
+  groupId          String?
+  group            JobTaskGroup?   @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  standardTaskId   String?
+  standardTask     StandardTask?   @relation(fields: [standardTaskId], references: [id], onDelete: SetNull)
+  unit             String?         // ĐVT snapshot
+  benchmarkScore   Float?          // Điểm chuẩn snapshot
+  complexityLevel  ComplexityLevel? // Mức độ phức tạp snapshot
+  conversionFactor Float?          // Hệ số quy đổi snapshot
+  assignedVolume   Float?          // Khối lượng giao
+  completedVolume  Float?          // Khối lượng hoàn thành
+  assignedScore    Float?          // Điểm giao = assignedVolume * benchmarkScore * conversionFactor
+  completedScore   Float?          // Điểm thực hiện = completedVolume * benchmarkScore * conversionFactor
+  completionRate   Float?          // Tỷ lệ hoàn thành = completedScore / assignedScore * 100%
+
   // KPI Scoring Fields
   kpiQuantity    Float?            // Điểm số lượng (0 - 100)
   kpiProgress    Float?            // Điểm tiến độ (0 - 100)

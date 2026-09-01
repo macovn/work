@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
-import { prisma, ensureTaskTypeColumn } from "@/lib/prisma";
+import { prisma, ensureStandardTaskSchema } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { createGoogleCalendarEvent } from "@/lib/google-calendar";
 import { NotificationEngine } from "@/lib/notification-engine";
+import { calculateTaskScores, getConversionFactorByComplexity } from "@/lib/standard-task";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    await ensureTaskTypeColumn();
+    await ensureStandardTaskSchema();
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -21,13 +22,15 @@ export async function GET(request: Request) {
     const status = searchParams.get("status");
     const priority = searchParams.get("priority");
     const taskType = searchParams.get("taskType");
+    const positionId = searchParams.get("positionId");
+    const groupId = searchParams.get("groupId");
+    const standardTaskId = searchParams.get("standardTaskId");
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
     const search = searchParams.get("search");
 
     const page = Math.max(parseInt(searchParams.get("page") || "1", 10), 1);
-    const parsedLimit = parseInt(searchParams.get("limit") || "10", 10);
-    const limit = [10, 50, 100].includes(parsedLimit) ? parsedLimit : (isNaN(parsedLimit) || parsedLimit <= 0 ? 10 : Math.min(parsedLimit, 100));
+    const limit = Math.min(parseInt(searchParams.get("limit") || "10", 10), 100);
     const skip = (page - 1) * limit;
 
     const where: any = {};
@@ -45,9 +48,10 @@ export async function GET(request: Request) {
     if (field) where.field = field;
     if (status) where.status = status;
     if (priority) where.priority = priority;
-    if (taskType === "RECURRING" || taskType === "AD_HOC") {
-      where.taskType = taskType;
-    }
+    if (taskType) where.taskType = taskType;
+    if (positionId) where.positionId = positionId;
+    if (groupId) where.groupId = groupId;
+    if (standardTaskId) where.standardTaskId = standardTaskId;
 
     if (startDate || endDate) {
       where.deadline = {};
@@ -72,6 +76,23 @@ export async function GET(request: Request) {
           },
           kpiEvaluator: {
             select: { id: true, fullName: true, email: true },
+          },
+          position: {
+            select: { id: true, name: true, code: true },
+          },
+          group: {
+            select: { id: true, name: true, code: true, weight: true },
+          },
+          standardTask: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+              unit: true,
+              benchmarkScore: true,
+              complexityLevel: true,
+              conversionFactor: true,
+            },
           },
         },
         orderBy: { deadline: "asc" },
@@ -98,6 +119,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    await ensureStandardTaskSchema();
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -108,14 +130,30 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { code, title, field, assigneeId, deadline, priority, taskType, status, result, notes } = body;
+    const {
+      code,
+      title,
+      field,
+      assigneeId,
+      deadline,
+      priority,
+      taskType,
+      status,
+      result,
+      notes,
+      positionId,
+      groupId,
+      standardTaskId,
+      unit,
+      benchmarkScore,
+      complexityLevel,
+      conversionFactor,
+      assignedVolume,
+      completedVolume,
+    } = body;
 
     if (!code || !title || !field || !assigneeId || !deadline) {
       return NextResponse.json({ error: "Thiếu các thông tin bắt buộc" }, { status: 400 });
-    }
-
-    if (taskType !== undefined && taskType !== "RECURRING" && taskType !== "AD_HOC") {
-      return NextResponse.json({ error: "Loại công việc không hợp lệ (RECURRING hoặc AD_HOC)" }, { status: 400 });
     }
 
     const existingCode = await prisma.task.findUnique({
@@ -124,6 +162,41 @@ export async function POST(request: Request) {
     if (existingCode) {
       return NextResponse.json({ error: `Mã công việc "${code}" đã tồn tại` }, { status: 400 });
     }
+
+    let snapPositionId = positionId || null;
+    let snapGroupId = groupId || null;
+    let snapStandardTaskId = standardTaskId || null;
+    let snapUnit = unit || null;
+    let snapBenchmarkScore = typeof benchmarkScore === "number" ? benchmarkScore : null;
+    let snapComplexityLevel = complexityLevel || null;
+    let snapConversionFactor = typeof conversionFactor === "number" ? conversionFactor : null;
+
+    if (standardTaskId) {
+      const stdTask = await prisma.standardTask.findUnique({
+        where: { id: standardTaskId },
+      });
+      if (stdTask) {
+        snapPositionId = stdTask.positionId;
+        snapGroupId = stdTask.groupId;
+        snapStandardTaskId = stdTask.id;
+        snapUnit = stdTask.unit;
+        snapBenchmarkScore = stdTask.benchmarkScore;
+        snapComplexityLevel = stdTask.complexityLevel;
+        snapConversionFactor = stdTask.conversionFactor;
+      }
+    } else if (snapComplexityLevel && !snapConversionFactor) {
+      snapConversionFactor = getConversionFactorByComplexity(snapComplexityLevel);
+    }
+
+    const parsedAssignedVol = typeof assignedVolume === "number" ? assignedVolume : (assignedVolume ? Number(assignedVolume) : null);
+    const parsedCompletedVol = typeof completedVolume === "number" ? completedVolume : (completedVolume ? Number(completedVolume) : null);
+
+    const scores = calculateTaskScores({
+      benchmarkScore: snapBenchmarkScore,
+      conversionFactor: snapConversionFactor,
+      assignedVolume: parsedAssignedVol,
+      completedVolume: parsedCompletedVol,
+    });
 
     const settings = await NotificationEngine.getSettings();
     let googleEventId: string | null = null;
@@ -138,7 +211,7 @@ export async function POST(request: Request) {
         priority: priority || "LOW",
         taskType: taskType || "RECURRING",
         status: status || "TODO",
-        notes,
+        notes: notes || undefined,
       });
     }
 
@@ -155,19 +228,40 @@ export async function POST(request: Request) {
         result: result || null,
         notes: notes || null,
         googleEventId,
+        positionId: snapPositionId,
+        groupId: snapGroupId,
+        standardTaskId: snapStandardTaskId,
+        unit: snapUnit,
+        benchmarkScore: snapBenchmarkScore,
+        complexityLevel: snapComplexityLevel,
+        conversionFactor: snapConversionFactor,
+        assignedVolume: parsedAssignedVol,
+        completedVolume: parsedCompletedVol,
+        assignedScore: scores.assignedScore,
+        completedScore: scores.completedScore,
+        completionRate: scores.completionRate,
       },
       include: {
         assignee: {
           select: { id: true, fullName: true, email: true },
         },
+        position: {
+          select: { id: true, name: true, code: true },
+        },
+        group: {
+          select: { id: true, name: true, code: true },
+        },
+        standardTask: {
+          select: { id: true, name: true, code: true, unit: true, benchmarkScore: true, complexityLevel: true, conversionFactor: true },
+        },
       },
     });
 
     NotificationEngine.evaluateAndTriggerNotifications().catch((err) => {
-      console.error("[Post Task Notification Error]:", err);
+      console.error("[Post Create Notification Error]:", err);
     });
 
-    return NextResponse.json({ message: "Tạo công việc thành công", task: newTask }, { status: 201 });
+    return NextResponse.json(newTask, { status: 201 });
   } catch (error: any) {
     console.error("[Tasks POST API Error]:", error);
     return NextResponse.json({ error: error?.message || "Lỗi khi tạo công việc" }, { status: 500 });

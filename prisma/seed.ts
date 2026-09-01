@@ -1,10 +1,93 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { PILOT_DAN_SO_POSITION } from "../lib/standard-task";
 
 const prisma = new PrismaClient();
 
+export async function seedStandardTaskCatalog() {
+  console.log("Seeding Standard Task Catalog (Pilot Dân số)...");
+
+  // 1. Upsert Position
+  const pos = await prisma.jobPosition.upsert({
+    where: { code: PILOT_DAN_SO_POSITION.code },
+    update: {
+      name: PILOT_DAN_SO_POSITION.name,
+      description: PILOT_DAN_SO_POSITION.description,
+      isActive: true,
+    },
+    create: {
+      code: PILOT_DAN_SO_POSITION.code,
+      name: PILOT_DAN_SO_POSITION.name,
+      description: PILOT_DAN_SO_POSITION.description,
+      isActive: true,
+      order: 1,
+    },
+  });
+
+  // 2. Upsert Groups & Standard Tasks
+  let groupOrder = 1;
+  let taskOrder = 1;
+
+  for (const groupData of PILOT_DAN_SO_POSITION.groups) {
+    const group = await prisma.jobTaskGroup.upsert({
+      where: {
+        positionId_code: {
+          positionId: pos.id,
+          code: groupData.code,
+        },
+      },
+      update: {
+        name: groupData.name,
+        weight: groupData.weight,
+        isActive: true,
+      },
+      create: {
+        positionId: pos.id,
+        code: groupData.code,
+        name: groupData.name,
+        weight: groupData.weight,
+        isActive: true,
+        order: groupOrder++,
+      },
+    });
+
+    for (const taskData of groupData.tasks) {
+      await prisma.standardTask.upsert({
+        where: { code: taskData.code },
+        update: {
+          positionId: pos.id,
+          groupId: group.id,
+          name: taskData.name,
+          unit: taskData.unit,
+          benchmarkScore: taskData.benchmarkScore,
+          complexityLevel: taskData.complexityLevel,
+          conversionFactor: taskData.conversionFactor,
+          isActive: true,
+        },
+        create: {
+          positionId: pos.id,
+          groupId: group.id,
+          code: taskData.code,
+          name: taskData.name,
+          unit: taskData.unit,
+          benchmarkScore: taskData.benchmarkScore,
+          complexityLevel: taskData.complexityLevel,
+          conversionFactor: taskData.conversionFactor,
+          isActive: true,
+          order: taskOrder++,
+        },
+      });
+    }
+  }
+
+  console.log("Seeded 14 Standard Tasks for Pilot Dân số successfully.");
+}
+
 export async function runSeed() {
   console.log("Starting seed process...");
+
+  // Seed Standard Task Catalog
+  await seedStandardTaskCatalog();
 
   // 1. Create or reset default settings
   await prisma.notificationSetting.upsert({

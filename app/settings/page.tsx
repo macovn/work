@@ -269,6 +269,57 @@ export default function SettingsPage() {
           </label>
         </div>
 
+        {/* 4. Standard Task Catalog Management (Pilot Dân số) */}
+        <section className="bg-white p-6 rounded-2xl border border-blue-200/80 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-blue-100 pb-3">
+            <div className="flex items-center gap-2">
+              <Database className="w-5 h-5 text-blue-600" />
+              <h2 className="font-bold text-gray-900 text-base">Khung Danh Mục Công Việc Chuẩn (Pilot Vị Trí Dân Số)</h2>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                if (!window.confirm("Nạp hoặc làm mới 14 công việc chuẩn cho Vị trí Dân số?")) return;
+                setSeeding(true);
+                setMessage("");
+                setError("");
+                try {
+                  const res = await fetch("/api/standard-tasks/seed", { method: "POST" });
+                  const data = await res.json();
+                  if (!res.ok) throw new Error(data.error || "Không thể nạp danh mục chuẩn");
+                  setMessage("✓ Đã nạp thành công 14 công việc chuẩn Pilot Dân số (3 nhóm việc, hệ số N1-N5 chuẩn hóa)!");
+                } catch (err: any) {
+                  setError(err.message || "Lỗi khi nạp danh mục chuẩn");
+                } finally {
+                  setSeeding(false);
+                }
+              }}
+              disabled={seeding}
+              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl disabled:opacity-50 transition shadow-sm"
+            >
+              {seeding ? "Đang nạp..." : "Nạp / Khôi phục 14 CV Chuẩn (Dân số)"}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 text-xs">
+            <div className="bg-blue-50/70 p-3 rounded-xl border border-blue-100">
+              <span className="text-[11px] text-blue-800 font-bold block uppercase">Vị trí thí điểm</span>
+              <span className="text-sm font-black text-blue-950 mt-0.5 block">Vị trí Dân số (VT-DAN-SO)</span>
+              <span className="text-[10px] text-blue-600 font-medium">Sẵn sàng mở rộng 21 vị trí tiếp theo</span>
+            </div>
+            <div className="bg-indigo-50/70 p-3 rounded-xl border border-indigo-100">
+              <span className="text-[11px] text-indigo-800 font-bold block uppercase">Nhóm công việc</span>
+              <span className="text-sm font-black text-indigo-950 mt-0.5 block">3 nhóm (25% - 45% - 30%)</span>
+              <span className="text-[10px] text-indigo-600 font-medium">Tổng trọng số = 100%</span>
+            </div>
+            <div className="bg-emerald-50/70 p-3 rounded-xl border border-emerald-100">
+              <span className="text-[11px] text-emerald-800 font-bold block uppercase">Công việc chuẩn</span>
+              <span className="text-sm font-black text-emerald-950 mt-0.5 block">14 sản phẩm / công việc</span>
+              <span className="text-[10px] text-emerald-600 font-medium">Mức N1 (x1.00) &rarr; N5 (x2.50)</span>
+            </div>
+          </div>
+        </section>
+
         <section className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-3">
           <div className="flex items-center gap-2">
             <Database className="w-5 h-5 text-violet-600" />

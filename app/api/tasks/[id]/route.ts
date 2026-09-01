@@ -28,18 +28,35 @@ export async function PATCH(
     const body = await request.json();
 
     if (user.role !== "ADMIN") {
-      // User can only update their own task's status, result, notes
+      // User can update status, result, notes, completedVolume
       if (task.assigneeId !== user.id) {
         return NextResponse.json({ error: "Bạn không có quyền chỉnh sửa công việc này" }, { status: 403 });
       }
 
-      const { status, result, notes } = body;
+      const { status, result, notes, completedVolume } = body;
+      const parsedCompletedVol = completedVolume !== undefined ? (completedVolume !== null ? Number(completedVolume) : null) : task.completedVolume;
+
+      let newCompletedScore = task.completedScore;
+      let newCompletionRate = task.completionRate;
+
+      if (task.benchmarkScore && task.conversionFactor && parsedCompletedVol !== null) {
+        newCompletedScore = Number((parsedCompletedVol * task.benchmarkScore * task.conversionFactor).toFixed(2));
+        if (task.assignedScore && task.assignedScore > 0) {
+          newCompletionRate = Number(((newCompletedScore / task.assignedScore) * 100).toFixed(2));
+        }
+      }
+
       const updatedTask = await prisma.task.update({
         where: { id: taskId },
         data: {
           ...(status && { status }),
           ...(result !== undefined && { result }),
           ...(notes !== undefined && { notes }),
+          ...(completedVolume !== undefined && {
+            completedVolume: parsedCompletedVol,
+            completedScore: newCompletedScore,
+            completionRate: newCompletionRate,
+          }),
         },
         include: {
           assignee: {
@@ -48,6 +65,9 @@ export async function PATCH(
           kpiEvaluator: {
             select: { id: true, fullName: true, email: true },
           },
+          position: { select: { id: true, name: true, code: true } },
+          group: { select: { id: true, name: true, code: true } },
+          standardTask: { select: { id: true, name: true, code: true, unit: true, benchmarkScore: true, complexityLevel: true, conversionFactor: true } },
         },
       });
 
@@ -68,10 +88,74 @@ export async function PATCH(
     }
 
     // Admin update
-    const { code, title, field, assigneeId, deadline, priority, taskType, status, result, notes } = body;
+    const {
+      code,
+      title,
+      field,
+      assigneeId,
+      deadline,
+      priority,
+      taskType,
+      status,
+      result,
+      notes,
+      positionId,
+      groupId,
+      standardTaskId,
+      unit,
+      benchmarkScore,
+      complexityLevel,
+      conversionFactor,
+      assignedVolume,
+      completedVolume,
+    } = body;
 
     if (taskType !== undefined && taskType !== "RECURRING" && taskType !== "AD_HOC") {
       return NextResponse.json({ error: "Loại công việc không hợp lệ (RECURRING hoặc AD_HOC)" }, { status: 400 });
+    }
+
+    let snapPositionId = positionId !== undefined ? positionId : task.positionId;
+    let snapGroupId = groupId !== undefined ? groupId : task.groupId;
+    let snapStandardTaskId = standardTaskId !== undefined ? standardTaskId : task.standardTaskId;
+    let snapUnit = unit !== undefined ? unit : task.unit;
+    let snapBenchmarkScore = benchmarkScore !== undefined ? (benchmarkScore !== null ? Number(benchmarkScore) : null) : task.benchmarkScore;
+    let snapComplexityLevel = complexityLevel !== undefined ? complexityLevel : task.complexityLevel;
+    let snapConversionFactor = conversionFactor !== undefined ? (conversionFactor !== null ? Number(conversionFactor) : null) : task.conversionFactor;
+
+    if (standardTaskId && standardTaskId !== task.standardTaskId) {
+      const stdTask = await prisma.standardTask.findUnique({
+        where: { id: standardTaskId },
+      });
+      if (stdTask) {
+        snapPositionId = stdTask.positionId;
+        snapGroupId = stdTask.groupId;
+        snapStandardTaskId = stdTask.id;
+        snapUnit = stdTask.unit;
+        snapBenchmarkScore = stdTask.benchmarkScore;
+        snapComplexityLevel = stdTask.complexityLevel;
+        snapConversionFactor = stdTask.conversionFactor;
+      }
+    }
+
+    const parsedAssignedVol = assignedVolume !== undefined ? (assignedVolume !== null ? Number(assignedVolume) : null) : task.assignedVolume;
+    const parsedCompletedVol = completedVolume !== undefined ? (completedVolume !== null ? Number(completedVolume) : null) : task.completedVolume;
+
+    let assignedScore = task.assignedScore;
+    let completedScore = task.completedScore;
+    let completionRate = task.completionRate;
+
+    if (snapBenchmarkScore !== null && snapConversionFactor !== null) {
+      if (parsedAssignedVol !== null) {
+        assignedScore = Number((parsedAssignedVol * snapBenchmarkScore * snapConversionFactor).toFixed(2));
+      }
+      if (parsedCompletedVol !== null) {
+        completedScore = Number((parsedCompletedVol * snapBenchmarkScore * snapConversionFactor).toFixed(2));
+      }
+      if (assignedScore !== null && assignedScore > 0 && completedScore !== null) {
+        completionRate = Number(((completedScore / assignedScore) * 100).toFixed(2));
+      } else if (assignedScore === 0 && completedScore === 0) {
+        completionRate = 100;
+      }
     }
 
     const updatedTask = await prisma.task.update({
@@ -87,6 +171,18 @@ export async function PATCH(
         ...(status && { status }),
         ...(result !== undefined && { result }),
         ...(notes !== undefined && { notes }),
+        positionId: snapPositionId,
+        groupId: snapGroupId,
+        standardTaskId: snapStandardTaskId,
+        unit: snapUnit,
+        benchmarkScore: snapBenchmarkScore,
+        complexityLevel: snapComplexityLevel,
+        conversionFactor: snapConversionFactor,
+        assignedVolume: parsedAssignedVol,
+        completedVolume: parsedCompletedVol,
+        assignedScore,
+        completedScore,
+        completionRate,
       },
       include: {
         assignee: {
@@ -95,6 +191,9 @@ export async function PATCH(
         kpiEvaluator: {
           select: { id: true, fullName: true, email: true },
         },
+        position: { select: { id: true, name: true, code: true } },
+        group: { select: { id: true, name: true, code: true } },
+        standardTask: { select: { id: true, name: true, code: true, unit: true, benchmarkScore: true, complexityLevel: true, conversionFactor: true } },
       },
     });
 

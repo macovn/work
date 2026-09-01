@@ -39,6 +39,31 @@ interface TaskItem {
   result?: string | null;
   notes?: string | null;
 
+  // Standard Task Catalog & Score Snapshot Fields
+  positionId?: string | null;
+  position?: { id: string; name: string; code: string } | null;
+  groupId?: string | null;
+  group?: { id: string; name: string; code: string; weight?: number } | null;
+  standardTaskId?: string | null;
+  standardTask?: {
+    id: string;
+    name: string;
+    code: string;
+    unit: string;
+    benchmarkScore: number;
+    complexityLevel: "N1" | "N2" | "N3" | "N4" | "N5";
+    conversionFactor: number;
+  } | null;
+  unit?: string | null;
+  benchmarkScore?: number | null;
+  complexityLevel?: "N1" | "N2" | "N3" | "N4" | "N5" | null;
+  conversionFactor?: number | null;
+  assignedVolume?: number | null;
+  completedVolume?: number | null;
+  assignedScore?: number | null;
+  completedScore?: number | null;
+  completionRate?: number | null;
+
   // KPI fields
   kpiQuantity?: number | null;
   kpiProgress?: number | null;
@@ -62,6 +87,8 @@ export default function TasksPage() {
 
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [users, setUsers] = useState<UserItem[]>([]);
+  const [positions, setPositions] = useState<any[]>([]);
+  const [standardTasks, setStandardTasks] = useState<any[]>([]);
   const [currentUser, setCurrentUser] = useState<{ id: string; role: "ADMIN" | "USER" } | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -77,6 +104,7 @@ export default function TasksPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("");
   const [taskTypeFilter, setTaskTypeFilter] = useState("");
+  const [positionFilter, setPositionFilter] = useState("");
   const [assigneeFilter, setAssigneeFilter] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -120,12 +148,48 @@ export default function TasksPage() {
     status: "TODO",
     result: "",
     notes: "",
+    positionId: "",
+    groupId: "",
+    standardTaskId: "",
+    unit: "",
+    benchmarkScore: "",
+    complexityLevel: "",
+    conversionFactor: "",
+    assignedVolume: "1",
+    completedVolume: "",
   });
 
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Fetch current user details
+  const computedAssignedScore =
+    formData.benchmarkScore && formData.conversionFactor && formData.assignedVolume
+      ? Number(
+          (
+            Number(formData.assignedVolume) *
+            Number(formData.benchmarkScore) *
+            Number(formData.conversionFactor)
+          ).toFixed(2)
+        )
+      : null;
+
+  const computedCompletedScore =
+    formData.benchmarkScore && formData.conversionFactor && formData.completedVolume
+      ? Number(
+          (
+            Number(formData.completedVolume) *
+            Number(formData.benchmarkScore) *
+            Number(formData.conversionFactor)
+          ).toFixed(2)
+        )
+      : null;
+
+  const computedCompletionRate =
+    computedAssignedScore && computedAssignedScore > 0 && computedCompletedScore !== null
+      ? Number(((computedCompletedScore / computedAssignedScore) * 100).toFixed(2))
+      : null;
+
+  // Fetch current user details & catalogs
   useEffect(() => {
     fetch("/api/auth/me")
       .then((res) => res.json())
@@ -137,6 +201,20 @@ export default function TasksPage() {
       .then((res) => res.json())
       .then((data) => {
         if (data.users) setUsers(data.users);
+      })
+      .catch(() => {});
+
+    fetch("/api/job-positions")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) setPositions(data);
+      })
+      .catch(() => {});
+
+    fetch("/api/standard-tasks")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) setStandardTasks(data);
       })
       .catch(() => {});
   }, []);
@@ -188,11 +266,42 @@ export default function TasksPage() {
     loadTasks();
   }, [loadTasks]);
 
+  const handleStandardTaskChange = (stdTaskId: string) => {
+    if (!stdTaskId) {
+      setFormData((prev) => ({
+        ...prev,
+        standardTaskId: "",
+        unit: "",
+        benchmarkScore: "",
+        complexityLevel: "",
+        conversionFactor: "",
+      }));
+      return;
+    }
+
+    const found = standardTasks.find((t) => t.id === stdTaskId);
+    if (found) {
+      setFormData((prev) => ({
+        ...prev,
+        standardTaskId: found.id,
+        positionId: found.positionId || prev.positionId,
+        groupId: found.groupId || prev.groupId,
+        title: prev.title ? prev.title : found.name,
+        field: found.position?.name ? `Vị trí ${found.position.name}` : prev.field,
+        unit: found.unit,
+        benchmarkScore: String(found.benchmarkScore),
+        complexityLevel: found.complexityLevel,
+        conversionFactor: String(found.conversionFactor),
+        assignedVolume: prev.assignedVolume || "1",
+      }));
+    }
+  };
+
   const openCreateModal = () => {
     setFormData({
       code: `TASK-${Math.floor(100 + Math.random() * 900)}`,
       title: "",
-      field: "Công nghệ thông tin",
+      field: "Dân số",
       assigneeId: users[0]?.id || "",
       deadline: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
       priority: "LOW",
@@ -200,6 +309,15 @@ export default function TasksPage() {
       status: "TODO",
       result: "",
       notes: "",
+      positionId: positions[0]?.id || "",
+      groupId: "",
+      standardTaskId: "",
+      unit: "",
+      benchmarkScore: "",
+      complexityLevel: "",
+      conversionFactor: "",
+      assignedVolume: "1",
+      completedVolume: "",
     });
     setFormError("");
     setIsCreateModalOpen(true);
@@ -218,6 +336,15 @@ export default function TasksPage() {
       status: task.status,
       result: task.result || "",
       notes: task.notes || "",
+      positionId: task.positionId || "",
+      groupId: task.groupId || "",
+      standardTaskId: task.standardTaskId || "",
+      unit: task.unit || "",
+      benchmarkScore: task.benchmarkScore !== null && task.benchmarkScore !== undefined ? String(task.benchmarkScore) : "",
+      complexityLevel: task.complexityLevel || "",
+      conversionFactor: task.conversionFactor !== null && task.conversionFactor !== undefined ? String(task.conversionFactor) : "",
+      assignedVolume: task.assignedVolume !== null && task.assignedVolume !== undefined ? String(task.assignedVolume) : "",
+      completedVolume: task.completedVolume !== null && task.completedVolume !== undefined ? String(task.completedVolume) : "",
     });
     setFormError("");
   };
@@ -536,7 +663,22 @@ export default function TasksPage() {
                   return (
                     <tr key={task.id} className="hover:bg-blue-50/40 transition">
                       <td className="p-3.5 font-mono font-bold text-gray-900">{task.code}</td>
-                      <td className="p-3.5 font-semibold text-gray-900 max-w-xs truncate">{task.title}</td>
+                      <td className="p-3.5 max-w-xs">
+                        <div className="font-semibold text-gray-900 truncate">{task.title}</div>
+                        {task.unit && (
+                          <div className="flex flex-wrap items-center gap-1 mt-1 text-[10px]">
+                            <span className="bg-teal-50 text-teal-800 border border-teal-200 px-1.5 py-0.5 rounded font-bold">
+                              {task.unit}
+                            </span>
+                            <span className="bg-blue-50 text-blue-800 border border-blue-200 px-1.5 py-0.5 rounded font-semibold">
+                              ĐC: {task.benchmarkScore}đ
+                            </span>
+                            <span className="bg-indigo-50 text-indigo-800 border border-indigo-200 px-1.5 py-0.5 rounded font-bold">
+                              {task.complexityLevel} (x{task.conversionFactor})
+                            </span>
+                          </div>
+                        )}
+                      </td>
                       <td className="p-3.5 text-gray-600">{task.field}</td>
                       <td className="p-3.5 font-medium text-gray-800">{task.assignee.fullName}</td>
                       <td className="p-3.5">
@@ -587,6 +729,13 @@ export default function TasksPage() {
                         >
                           {formatStatus(task.status)}
                         </span>
+                        {task.assignedScore !== null && task.assignedScore !== undefined && (
+                          <div className="block">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-teal-50 text-teal-900 border border-teal-200">
+                              <Star className="w-3 h-3 text-teal-600" /> Điểm: {task.completedScore ?? 0}/{task.assignedScore} ({task.completionRate ?? 0}%)
+                            </span>
+                          </div>
+                        )}
                         {task.status === "COMPLETED" && (
                           <div className="block">
                             {task.kpiScore !== null && task.kpiScore !== undefined ? (
@@ -745,6 +894,68 @@ export default function TasksPage() {
               </div>
             </div>
 
+            {viewingTask.unit && (
+              <div className="p-4 bg-teal-50/80 border border-teal-200 rounded-2xl space-y-3 text-xs">
+                <div className="flex items-center justify-between border-b border-teal-200/60 pb-2">
+                  <div className="flex items-center gap-1.5 font-black text-teal-900 text-sm">
+                    <Star className="w-4 h-4 text-teal-700" /> Định Mức Công Việc Chuẩn & Điểm Đạt Được
+                  </div>
+                  {viewingTask.completionRate !== null && viewingTask.completionRate !== undefined && (
+                    <span className="px-2.5 py-1 bg-teal-700 text-white font-black rounded-lg text-xs">
+                      TỶ LỆ: {viewingTask.completionRate}%
+                    </span>
+                  )}
+                </div>
+
+                {viewingTask.position && (
+                  <div className="text-[11px] text-teal-950 font-medium">
+                    <span><strong>Vị trí:</strong> {viewingTask.position.name}</span>
+                    {viewingTask.group && <span className="ml-3"><strong>Nhóm:</strong> {viewingTask.group.name}</span>}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-4 gap-2 text-center">
+                  <div className="bg-white p-2 rounded-xl border border-teal-100 shadow-sm">
+                    <span className="text-[10px] text-gray-500 font-bold block uppercase">ĐVT</span>
+                    <span className="text-xs font-black text-teal-950">{viewingTask.unit || "-"}</span>
+                  </div>
+                  <div className="bg-white p-2 rounded-xl border border-teal-100 shadow-sm">
+                    <span className="text-[10px] text-gray-500 font-bold block uppercase">Điểm chuẩn</span>
+                    <span className="text-xs font-black text-teal-950">{viewingTask.benchmarkScore ?? "-"}đ</span>
+                  </div>
+                  <div className="bg-white p-2 rounded-xl border border-teal-100 shadow-sm">
+                    <span className="text-[10px] text-gray-500 font-bold block uppercase">Mức độ</span>
+                    <span className="text-xs font-black text-teal-950">{viewingTask.complexityLevel || "-"}</span>
+                  </div>
+                  <div className="bg-white p-2 rounded-xl border border-teal-100 shadow-sm">
+                    <span className="text-[10px] text-gray-500 font-bold block uppercase">Hệ số (k)</span>
+                    <span className="text-xs font-black text-teal-950">x{viewingTask.conversionFactor ?? 1}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-center">
+                  <div className="bg-white p-2.5 rounded-xl border border-teal-100 shadow-sm text-left">
+                    <div className="flex justify-between items-center text-[10px] text-gray-500 font-bold uppercase">
+                      <span>Giao việc</span>
+                      <span className="text-teal-700 font-black">KL: {viewingTask.assignedVolume ?? "-"}</span>
+                    </div>
+                    <div className="text-sm font-black text-teal-950 mt-1">
+                      Điểm giao: {viewingTask.assignedScore !== null && viewingTask.assignedScore !== undefined ? `${viewingTask.assignedScore} điểm` : "Chưa tính"}
+                    </div>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-teal-100 shadow-sm text-left">
+                    <div className="flex justify-between items-center text-[10px] text-gray-500 font-bold uppercase">
+                      <span>Thực hiện</span>
+                      <span className="text-emerald-700 font-black">KL: {viewingTask.completedVolume ?? "-"}</span>
+                    </div>
+                    <div className="text-sm font-black text-emerald-800 mt-1">
+                      Điểm đạt: {viewingTask.completedScore !== null && viewingTask.completedScore !== undefined ? `${viewingTask.completedScore} điểm` : "Chưa có"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {viewingTask.kpiScore !== null && viewingTask.kpiScore !== undefined && (
               <div className="p-4 bg-purple-50/80 border border-purple-200 rounded-2xl space-y-3 text-xs">
                 <div className="flex items-center justify-between border-b border-purple-200/60 pb-2">
@@ -828,6 +1039,124 @@ export default function TasksPage() {
             <form onSubmit={handleSaveTask} className="space-y-4 text-xs">
               {currentUser?.role === "ADMIN" && (
                 <>
+                  {/* Standard Task Catalog Selection */}
+                  <div className="p-3.5 bg-gradient-to-r from-blue-50/70 to-indigo-50/70 border border-blue-200/80 rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="font-black text-blue-900 text-xs flex items-center gap-1.5">
+                        <Tag className="w-3.5 h-3.5 text-blue-700" /> Chuẩn Hóa Chức Danh & Công Việc Chuẩn
+                      </label>
+                      {formData.standardTaskId && (
+                        <button
+                          type="button"
+                          onClick={() => handleStandardTaskChange("")}
+                          className="text-[11px] text-blue-600 hover:text-blue-800 underline font-bold"
+                        >
+                          Xóa chọn công việc chuẩn
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="block font-semibold text-gray-700 mb-1">1. Vị trí việc làm</label>
+                        <select
+                          value={formData.positionId}
+                          onChange={(e) => {
+                            const newPosId = e.target.value;
+                            setFormData((prev) => ({
+                              ...prev,
+                              positionId: newPosId,
+                              groupId: "",
+                              standardTaskId: "",
+                              unit: "",
+                              benchmarkScore: "",
+                              complexityLevel: "",
+                              conversionFactor: "",
+                            }));
+                          }}
+                          className="w-full p-2 bg-white border border-blue-200 rounded-xl text-xs"
+                        >
+                          <option value="">-- Chọn vị trí việc làm --</option>
+                          {positions.map((pos) => (
+                            <option key={pos.id} value={pos.id}>
+                              {pos.name} ({pos.code})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-gray-700 mb-1">2. Chọn công việc chuẩn</label>
+                        <select
+                          value={formData.standardTaskId}
+                          onChange={(e) => handleStandardTaskChange(e.target.value)}
+                          className="w-full p-2 bg-white border border-blue-200 rounded-xl text-xs font-medium"
+                        >
+                          <option value="">-- Tùy chỉnh (Không chọn chuẩn) --</option>
+                          {standardTasks
+                            .filter((st) => !formData.positionId || st.positionId === formData.positionId)
+                            .map((st) => (
+                              <option key={st.id} value={st.id}>
+                                [{st.code}] {st.name} ({st.unit} - {st.complexityLevel} - {st.benchmarkScore}đ)
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Auto-filled Standard Task Info Card */}
+                    {formData.unit && (
+                      <div className="p-3 bg-white/90 border border-blue-100 rounded-xl space-y-2.5 shadow-sm">
+                        <div className="flex items-center justify-between text-[11px] font-black text-blue-900 border-b border-blue-50 pb-1.5">
+                          <span>✨ THÔNG TIN TỰ ĐỘNG TỪ DANH MỤC CHUẨN</span>
+                          <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
+                            Tự động điền & Khóa chuẩn
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2 text-center">
+                          <div className="p-1.5 bg-gray-50 rounded-lg border border-gray-100">
+                            <span className="text-[10px] text-gray-500 font-bold block uppercase">ĐVT</span>
+                            <span className="text-xs font-black text-gray-900">{formData.unit}</span>
+                          </div>
+                          <div className="p-1.5 bg-gray-50 rounded-lg border border-gray-100">
+                            <span className="text-[10px] text-gray-500 font-bold block uppercase">Điểm chuẩn</span>
+                            <span className="text-xs font-black text-blue-700">{formData.benchmarkScore}đ</span>
+                          </div>
+                          <div className="p-1.5 bg-gray-50 rounded-lg border border-gray-100">
+                            <span className="text-[10px] text-gray-500 font-bold block uppercase">Mức độ</span>
+                            <span className="text-xs font-black text-indigo-700">{formData.complexityLevel}</span>
+                          </div>
+                          <div className="p-1.5 bg-gray-50 rounded-lg border border-gray-100">
+                            <span className="text-[10px] text-gray-500 font-bold block uppercase">Hệ số quy đổi</span>
+                            <span className="text-xs font-black text-emerald-700">x{formData.conversionFactor}</span>
+                          </div>
+                        </div>
+
+                        {/* Assigned Volume and Live Assigned Score */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-gray-50">
+                          <div className="flex items-center gap-2">
+                            <label className="font-bold text-gray-700">Khối lượng giao:</label>
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              value={formData.assignedVolume}
+                              onChange={(e) => setFormData({ ...formData, assignedVolume: e.target.value })}
+                              placeholder="VD: 1, 2, 5..."
+                              className="w-24 p-1.5 bg-white border border-gray-300 rounded-lg text-xs font-bold text-center"
+                            />
+                            <span className="text-gray-500 font-semibold">{formData.unit}</span>
+                          </div>
+                          {computedAssignedScore !== null && (
+                            <div className="text-xs font-black text-blue-900 bg-blue-100/70 px-2.5 py-1 rounded-lg">
+                              Điểm giao: <span className="text-blue-700 text-sm">{computedAssignedScore}</span> điểm
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block font-bold text-gray-700 mb-1">Mã công việc *</label>
@@ -917,6 +1246,43 @@ export default function TasksPage() {
                     </select>
                   </div>
                 </>
+              )}
+
+              {/* Completed Volume Input & Live Score Calculation (Available when standard task is set) */}
+              {formData.unit && (
+                <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-2">
+                  <div className="flex items-center justify-between text-xs font-black text-emerald-950">
+                    <span className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Báo Cáo Khối Lượng Hoàn Thành
+                    </span>
+                    {computedCompletionRate !== null && (
+                      <span className="bg-emerald-600 text-white px-2 py-0.5 rounded-full text-[10px] font-bold">
+                        Đạt {computedCompletionRate}%
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <label className="font-bold text-gray-700">Khối lượng thực hiện:</label>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={formData.completedVolume}
+                        onChange={(e) => setFormData({ ...formData, completedVolume: e.target.value })}
+                        placeholder="VD: 1, 2..."
+                        className="w-24 p-1.5 bg-white border border-emerald-300 rounded-lg text-xs font-bold text-center"
+                      />
+                      <span className="text-gray-500 font-semibold">{formData.unit}</span>
+                    </div>
+
+                    {computedCompletedScore !== null && (
+                      <div className="text-xs font-black text-emerald-900 bg-emerald-100 px-2.5 py-1 rounded-lg">
+                        Điểm thực hiện: <span className="text-emerald-700 text-sm">{computedCompletedScore}</span> điểm
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
 
               {/* Status, Result, Notes (Editable by both Admin & User) */}
