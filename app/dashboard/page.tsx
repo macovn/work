@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import Link from "next/link";
@@ -20,6 +21,10 @@ export const revalidate = 0;
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
   const now = new Date();
 
   // Date thresholds
@@ -28,87 +33,109 @@ export default async function DashboardPage() {
   const in3Days = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
 
   // Where clause based on RBAC
-  const baseWhere = user?.role === "ADMIN" ? {} : { assigneeId: user?.id };
+  const baseWhere = user.role === "ADMIN" ? {} : { assigneeId: user.id };
 
-  const [
-    totalTasks,
-    overdueTasks,
-    dueTodayTasks,
-    dueIn3DaysTasks,
-    pausedTasks,
-    unupdatedTasks,
-    completedTasks,
-    warningAttentionTasks,
-  ] = await Promise.all([
-    // 1. Tổng số công việc
-    prisma.task.count({ where: baseWhere }),
+  let totalTasks = 0;
+  let overdueTasks = 0;
+  let dueTodayTasks = 0;
+  let dueIn3DaysTasks = 0;
+  let pausedTasks = 0;
+  let unupdatedTasks = 0;
+  let completedTasks = 0;
+  let warningAttentionTasks: any[] = [];
 
-    // 2. Quá hạn (deadline < now AND not completed AND not cancelled)
-    prisma.task.count({
-      where: {
-        ...baseWhere,
-        status: { notIn: ["COMPLETED", "CANCELLED"] },
-        deadline: { lt: now },
-      },
-    }),
+  try {
+    const [
+      _totalTasks,
+      _overdueTasks,
+      _dueTodayTasks,
+      _dueIn3DaysTasks,
+      _pausedTasks,
+      _unupdatedTasks,
+      _completedTasks,
+      _warningAttentionTasks,
+    ] = await Promise.all([
+      // 1. Tổng số công việc
+      prisma.task.count({ where: baseWhere }),
 
-    // 3. Đến hạn hôm nay (deadline inside today AND not completed AND not cancelled)
-    prisma.task.count({
-      where: {
-        ...baseWhere,
-        status: { notIn: ["COMPLETED", "CANCELLED"] },
-        deadline: { gte: startOfDay, lte: endOfDay },
-      },
-    }),
+      // 2. Quá hạn (deadline < now AND not completed AND not cancelled)
+      prisma.task.count({
+        where: {
+          ...baseWhere,
+          status: { notIn: ["COMPLETED", "CANCELLED"] },
+          deadline: { lt: now },
+        },
+      }),
 
-    // 4. Đến hạn trong 3 ngày (deadline inside next 3 days AND not completed AND not cancelled)
-    prisma.task.count({
-      where: {
-        ...baseWhere,
-        status: { notIn: ["COMPLETED", "CANCELLED"] },
-        deadline: { gte: now, lte: in3Days },
-      },
-    }),
+      // 3. Đến hạn hôm nay (deadline inside today AND not completed AND not cancelled)
+      prisma.task.count({
+        where: {
+          ...baseWhere,
+          status: { notIn: ["COMPLETED", "CANCELLED"] },
+          deadline: { gte: startOfDay, lte: endOfDay },
+        },
+      }),
 
-    // 5. Tạm dừng
-    prisma.task.count({
-      where: {
-        ...baseWhere,
-        status: "PAUSED",
-      },
-    }),
+      // 4. Đến hạn trong 3 ngày (deadline inside next 3 days AND not completed AND not cancelled)
+      prisma.task.count({
+        where: {
+          ...baseWhere,
+          status: { notIn: ["COMPLETED", "CANCELLED"] },
+          deadline: { gte: now, lte: in3Days },
+        },
+      }),
 
-    // 6. Chưa cập nhật (Result is null/empty AND status is TODO)
-    prisma.task.count({
-      where: {
-        ...baseWhere,
-        status: "TODO",
-        OR: [{ result: null }, { result: "" }],
-      },
-    }),
+      // 5. Tạm dừng
+      prisma.task.count({
+        where: {
+          ...baseWhere,
+          status: "PAUSED",
+        },
+      }),
 
-    // 7. Hoàn thành (for completion rate calculation)
-    prisma.task.count({
-      where: {
-        ...baseWhere,
-        status: "COMPLETED",
-      },
-    }),
+      // 6. Chưa cập nhật (Result is null/empty AND status is TODO)
+      prisma.task.count({
+        where: {
+          ...baseWhere,
+          status: "TODO",
+          OR: [{ result: null }, { result: "" }],
+        },
+      }),
 
-    // Query attention warning tasks (Overdue or Due in 24h)
-    prisma.task.findMany({
-      where: {
-        ...baseWhere,
-        status: { notIn: ["COMPLETED", "CANCELLED"] },
-        deadline: { lte: new Date(now.getTime() + 24 * 60 * 60 * 1000) },
-      },
-      include: {
-        assignee: { select: { fullName: true } },
-      },
-      orderBy: { deadline: "asc" },
-      take: 8,
-    }),
-  ]);
+      // 7. Hoàn thành (for completion rate calculation)
+      prisma.task.count({
+        where: {
+          ...baseWhere,
+          status: "COMPLETED",
+        },
+      }),
+
+      // Query attention warning tasks (Overdue or Due in 24h)
+      prisma.task.findMany({
+        where: {
+          ...baseWhere,
+          status: { notIn: ["COMPLETED", "CANCELLED"] },
+          deadline: { lte: new Date(now.getTime() + 24 * 60 * 60 * 1000) },
+        },
+        include: {
+          assignee: { select: { fullName: true } },
+        },
+        orderBy: { deadline: "asc" },
+        take: 8,
+      }),
+    ]);
+
+    totalTasks = _totalTasks;
+    overdueTasks = _overdueTasks;
+    dueTodayTasks = _dueTodayTasks;
+    dueIn3DaysTasks = _dueIn3DaysTasks;
+    pausedTasks = _pausedTasks;
+    unupdatedTasks = _unupdatedTasks;
+    completedTasks = _completedTasks;
+    warningAttentionTasks = _warningAttentionTasks;
+  } catch (err) {
+    console.error("[DashboardPage Data Fetch Error]:", err);
+  }
 
   const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
