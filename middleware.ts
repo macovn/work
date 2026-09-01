@@ -1,8 +1,22 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
+import { getJwtSecretBytes } from "@/lib/jwt-secret";
 
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "default-secret-qlcv-key");
+// Danh sách extension tĩnh được phép truy cập công khai.
+// Trước đây dùng `pathname.includes(".")` — điều đó cho phép BẤT KỲ đường dẫn
+// nào có dấu chấm đều bỏ qua xác thực (bypass vector). Chỉ cho phép extension tĩnh rõ ràng.
+const STATIC_EXTENSIONS = [
+  ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".avif",
+  ".css", ".js", ".map", ".mjs",
+  ".txt", ".xml", ".webmanifest", ".json",
+  ".woff", ".woff2", ".ttf", ".otf", ".eot",
+];
+
+function isStaticAsset(pathname: string): boolean {
+  const lastSegment = pathname.split("/").pop() || "";
+  return STATIC_EXTENSIONS.some((ext) => lastSegment.toLowerCase().endsWith(ext));
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -14,7 +28,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/api/auth/google") ||
     pathname.startsWith("/api/cron") ||
     pathname.startsWith("/_next") ||
-    pathname.includes(".")
+    isStaticAsset(pathname)
   ) {
     return NextResponse.next();
   }
@@ -29,7 +43,7 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecretBytes());
     const role = payload.role as string;
 
     // Admin-only routes

@@ -33,7 +33,12 @@ next-env.d.ts
 /acceptance-evidence
 acceptance-results.json
 acceptance-evidence.sha256
+db-acceptance-results.json
+db-acceptance-evidence.sha256
 /scratch/
 scratch_*.ts
+run_*.ts
+verify_*.ts
+dev-server.log
 .next_old
 

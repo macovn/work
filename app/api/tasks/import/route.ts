@@ -53,6 +53,14 @@ function parsePriority(val: any): "LOW" | "MEDIUM" | "HIGH" {
   return "LOW";
 }
 
+// TaskType mapping
+function parseTaskType(val: any): "RECURRING" | "AD_HOC" {
+  if (!val) return "RECURRING";
+  const str = String(val).trim().toUpperCase();
+  if (str.includes("AD_HOC") || str.includes("ĐỘT XUẤT") || str.includes("DOT XUAT")) return "AD_HOC";
+  return "RECURRING";
+}
+
 // Status mapping
 function parseStatus(val: any): "TODO" | "IN_PROGRESS" | "PAUSED" | "COMPLETED" | "CANCELLED" {
   if (!val) return "TODO";
@@ -108,9 +116,30 @@ export async function POST(request: Request) {
       userMap.set(u.fullName.toLowerCase().trim(), u.id);
     }
 
-    let importedCount = 0;
+    // Pre-fetch tất cả mã công việc đã tồn tại để kiểm tra trùng lặp trong bộ nhớ
+    // thay vì N lần truy vấn DB riêng lẻ
+    const existingCodes = new Set(
+      (await prisma.task.findMany({ select: { code: true } })).map((t) => t.code)
+    );
+
     const errors: string[] = [];
     let autoSeq = Date.now();
+
+    // Bước 1: Validate tất cả các dòng, thu thập dữ liệu hợp lệ vào mảng batch
+    const validTasks: {
+      code: string;
+      title: string;
+      field: string;
+      assigneeId: string;
+      deadline: Date;
+      priority: "LOW" | "MEDIUM" | "HIGH";
+      taskType: "RECURRING" | "AD_HOC";
+      status: "TODO" | "IN_PROGRESS" | "PAUSED" | "COMPLETED" | "CANCELLED";
+      notes: string | null;
+    }[] = [];
+
+    // Track các mã được tạo trong batch này để phát hiện trùng nội bộ
+    const batchCodes = new Set<string>();
 
     for (let i = 0; i < rawRows.length; i++) {
       const row = rawRows[i];
@@ -134,6 +163,7 @@ export async function POST(request: Request) {
       const assigneeInput = String(getVal("người thực hiện", "assignee", "người làm", "email")).trim();
       const rawDeadline = getVal("hạn", "deadline", "ngày");
       const priorityInput = getVal("ưu tiên", "priority");
+      const taskTypeInput = getVal("loại công việc", "loại", "type");
       const statusInput = getVal("trạng thái", "status");
       const notes = String(getVal("ghi chú", "note", "nội dung")).trim();
 
@@ -148,11 +178,8 @@ export async function POST(request: Request) {
         code = `TASK-IMP-${autoSeq.toString().slice(-5)}`;
       }
 
-      // Check if code already exists
-      const existingTask = await prisma.task.findUnique({
-        where: { code },
-      });
-      if (existingTask) {
+      // Check trùng mã với DB và trùng nội bộ trong cùng batch
+      if (existingCodes.has(code) || batchCodes.has(code)) {
         errors.push(`Dòng ${rowIndex}: Mã công việc "${code}" đã tồn tại trên hệ thống.`);
         continue;
       }
@@ -186,22 +213,28 @@ export async function POST(request: Request) {
       }
 
       const priority = parsePriority(priorityInput);
+      const taskType = parseTaskType(taskTypeInput);
       const status = parseStatus(statusInput);
 
-      await prisma.task.create({
-        data: {
-          code,
-          title,
-          field,
-          assigneeId,
-          deadline,
-          priority,
-          status,
-          notes: notes || null,
-        },
+      validTasks.push({
+        code,
+        title,
+        field,
+        assigneeId,
+        deadline,
+        priority,
+        taskType,
+        status,
+        notes: notes || null,
       });
+      batchCodes.add(code);
+    }
 
-      importedCount++;
+    // Bước 2: Batch insert một lần duy nhất — giảm N round-trip DB xuống còn 1
+    let importedCount = 0;
+    if (validTasks.length > 0) {
+      const result = await prisma.task.createMany({ data: validTasks });
+      importedCount = result.count;
     }
 
     if (importedCount > 0) {

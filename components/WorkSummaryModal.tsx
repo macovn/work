@@ -17,7 +17,7 @@ import {
   Award,
   ChevronRight,
 } from "lucide-react";
-import { formatDate, formatPriority, formatStatus } from "@/lib/utils";
+import { formatDate, formatPriority, formatStatus, formatTaskType } from "@/lib/utils";
 
 interface WorkSummaryTask {
   id: string;
@@ -28,6 +28,7 @@ interface WorkSummaryTask {
   assignee: { id: string; fullName: string; email: string };
   deadline: string;
   priority: "LOW" | "MEDIUM" | "HIGH";
+  taskType?: "RECURRING" | "AD_HOC";
   status: "TODO" | "IN_PROGRESS" | "PAUSED" | "COMPLETED" | "CANCELLED";
   result?: string | null;
   notes?: string | null;
@@ -662,6 +663,10 @@ export function WorkSummaryModal({ isOpen, onClose }: WorkSummaryModalProps) {
               <div>
                 <p className="text-gray-400 font-semibold">Người thực hiện:</p>
                 <p className="font-bold text-gray-800">{viewingTask.assignee.fullName}</p>
+              </div>
+              <div>
+                <p className="text-gray-400 font-semibold">Loại công việc:</p>
+                <p className="font-bold text-gray-800">{formatTaskType(viewingTask.taskType)}</p>
               </div>
               <div>
                 <p className="text-gray-400 font-semibold">Mức độ ưu tiên:</p>

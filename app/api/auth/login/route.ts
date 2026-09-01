@@ -2,8 +2,13 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword, signToken, setAuthCookie } from "@/lib/auth";
 import { NotificationEngine } from "@/lib/notification-engine";
+import { checkRateLimit, resetRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
+
+// Chống brute-force: tối đa 5 lần thử thất bại trong 5 phút cho mỗi cặp IP + email
+const LOGIN_RATE_LIMIT = 5;
+const LOGIN_RATE_WINDOW_MS = 5 * 60 * 1000;
 
 export async function POST(request: Request) {
   try {
@@ -14,8 +19,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Email và mật khẩu là bắt buộc" }, { status: 400 });
     }
 
+    const normalizedEmail = String(email).toLowerCase().trim();
+    const rateLimitKey = `login:${getClientIp(request)}:${normalizedEmail}`;
+    const rateLimit = await checkRateLimit(rateLimitKey, LOGIN_RATE_LIMIT, LOGIN_RATE_WINDOW_MS);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: `Bạn đã thử đăng nhập quá nhiều lần. Vui lòng thử lại sau ${rateLimit.retryAfterSec} giây.` },
+        { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSec) } }
+      );
+    }
+
     const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
+      where: { email: normalizedEmail },
     });
 
     if (!user) {
@@ -39,6 +54,9 @@ export async function POST(request: Request) {
     });
 
     await setAuthCookie(token);
+
+    // Đăng nhập thành công => reset bộ đếm rate limit cho cặp IP + email này
+    await resetRateLimit(rateLimitKey);
 
     // Trigger Login Alert asynchronously (fail-safe)
     NotificationEngine.handleLoginAlert(user.id).catch((err) => {

@@ -19,6 +19,7 @@ export async function GET(request: Request) {
     const field = searchParams.get("field");
     const status = searchParams.get("status");
     const priority = searchParams.get("priority");
+    const taskType = searchParams.get("taskType");
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
     const search = searchParams.get("search");
@@ -43,6 +44,9 @@ export async function GET(request: Request) {
     if (field) where.field = field;
     if (status) where.status = status;
     if (priority) where.priority = priority;
+    if (taskType === "RECURRING" || taskType === "AD_HOC") {
+      where.taskType = taskType;
+    }
 
     if (startDate || endDate) {
       where.deadline = {};
@@ -103,10 +107,14 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { code, title, field, assigneeId, deadline, priority, status, result, notes } = body;
+    const { code, title, field, assigneeId, deadline, priority, taskType, status, result, notes } = body;
 
     if (!code || !title || !field || !assigneeId || !deadline) {
       return NextResponse.json({ error: "Thiếu các thông tin bắt buộc" }, { status: 400 });
+    }
+
+    if (taskType !== undefined && taskType !== "RECURRING" && taskType !== "AD_HOC") {
+      return NextResponse.json({ error: "Loại công việc không hợp lệ (RECURRING hoặc AD_HOC)" }, { status: 400 });
     }
 
     const existingCode = await prisma.task.findUnique({
@@ -127,6 +135,7 @@ export async function POST(request: Request) {
         deadline: new Date(deadline),
         field: field.trim(),
         priority: priority || "LOW",
+        taskType: taskType || "RECURRING",
         status: status || "TODO",
         notes,
       });
@@ -140,6 +149,7 @@ export async function POST(request: Request) {
         assigneeId,
         deadline: new Date(deadline),
         priority: priority || "LOW",
+        taskType: taskType || "RECURRING",
         status: status || "TODO",
         result: result || null,
         notes: notes || null,

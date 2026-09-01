@@ -12,6 +12,7 @@ export async function GET() {
         "Lĩnh vực": "Công nghệ thông tin",
         "Người thực hiện (Email/Tên)": "user1@example.com",
         "Hạn hoàn thành (YYYY-MM-DD)": "2026-09-15 17:00",
+        "Loại công việc (RECURRING/AD_HOC)": "RECURRING",
         "Độ ưu tiên (LOW/MEDIUM/HIGH)": "HIGH",
         "Trạng thái (TODO/IN_PROGRESS/COMPLETED)": "TODO",
         "Ghi chú": "Cần phối hợp với đội vận hành hệ thống",
@@ -22,6 +23,7 @@ export async function GET() {
         "Lĩnh vực": "Tài chính - Kế toán",
         "Người thực hiện (Email/Tên)": "user2@example.com",
         "Hạn hoàn thành (YYYY-MM-DD)": "2026-09-30 12:00",
+        "Loại công việc (RECURRING/AD_HOC)": "AD_HOC",
         "Độ ưu tiên (LOW/MEDIUM/HIGH)": "MEDIUM",
         "Trạng thái (TODO/IN_PROGRESS/COMPLETED)": "IN_PROGRESS",
         "Ghi chú": "Tổng hợp dữ liệu từ 5 chi nhánh",
@@ -37,6 +39,7 @@ export async function GET() {
       { wch: 25 }, // Field
       { wch: 30 }, // Assignee
       { wch: 25 }, // Deadline
+      { wch: 30 }, // Task Type
       { wch: 25 }, // Priority
       { wch: 30 }, // Status
       { wch: 35 }, // Notes

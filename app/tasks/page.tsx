@@ -23,7 +23,7 @@ import {
   Award,
   Star,
 } from "lucide-react";
-import { formatDate, formatPriority, formatStatus } from "@/lib/utils";
+import { formatDate, formatPriority, formatStatus, formatTaskType } from "@/lib/utils";
 
 interface TaskItem {
   id: string;
@@ -34,6 +34,7 @@ interface TaskItem {
   assignee: { id: string; fullName: string; email: string };
   deadline: string;
   priority: "LOW" | "MEDIUM" | "HIGH";
+  taskType: "RECURRING" | "AD_HOC";
   status: "TODO" | "IN_PROGRESS" | "PAUSED" | "COMPLETED" | "CANCELLED";
   result?: string | null;
   notes?: string | null;
@@ -75,6 +76,7 @@ export default function TasksPage() {
   const [fieldFilter, setFieldFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("");
+  const [taskTypeFilter, setTaskTypeFilter] = useState("");
   const [assigneeFilter, setAssigneeFilter] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -114,6 +116,7 @@ export default function TasksPage() {
     assigneeId: "",
     deadline: "",
     priority: "LOW",
+    taskType: "RECURRING",
     status: "TODO",
     result: "",
     notes: "",
@@ -152,6 +155,7 @@ export default function TasksPage() {
       if (fieldFilter) params.set("field", fieldFilter);
       if (statusFilter) params.set("status", statusFilter);
       if (priorityFilter) params.set("priority", priorityFilter);
+      if (taskTypeFilter) params.set("taskType", taskTypeFilter);
       if (assigneeFilter) params.set("assigneeId", assigneeFilter);
       if (startDate) params.set("startDate", startDate);
       if (endDate) params.set("endDate", endDate);
@@ -178,7 +182,7 @@ export default function TasksPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, search, fieldFilter, statusFilter, priorityFilter, assigneeFilter, startDate, endDate, searchParams]);
+  }, [page, limit, search, fieldFilter, statusFilter, priorityFilter, taskTypeFilter, assigneeFilter, startDate, endDate, searchParams]);
 
   useEffect(() => {
     loadTasks();
@@ -192,6 +196,7 @@ export default function TasksPage() {
       assigneeId: users[0]?.id || "",
       deadline: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
       priority: "LOW",
+      taskType: "RECURRING",
       status: "TODO",
       result: "",
       notes: "",
@@ -209,6 +214,7 @@ export default function TasksPage() {
       assigneeId: task.assigneeId,
       deadline: new Date(task.deadline).toISOString().slice(0, 16),
       priority: task.priority,
+      taskType: task.taskType || "RECURRING",
       status: task.status,
       result: task.result || "",
       notes: task.notes || "",
@@ -385,7 +391,7 @@ export default function TasksPage() {
 
       {/* Filter & Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           <div className="relative">
             <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
             <input
@@ -430,6 +436,19 @@ export default function TasksPage() {
             <option value="HIGH">Rất gấp</option>
           </select>
 
+          <select
+            value={taskTypeFilter}
+            onChange={(e) => {
+              setTaskTypeFilter(e.target.value);
+              setPage(1);
+            }}
+            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">-- Loại công việc --</option>
+            <option value="RECURRING">Thường xuyên</option>
+            <option value="AD_HOC">Đột xuất</option>
+          </select>
+
           {currentUser?.role === "ADMIN" && (
             <select
               value={assigneeFilter}
@@ -467,12 +486,13 @@ export default function TasksPage() {
             />
           </div>
 
-          {(search || statusFilter || priorityFilter || assigneeFilter || startDate || endDate) && (
+          {(search || statusFilter || priorityFilter || taskTypeFilter || assigneeFilter || startDate || endDate) && (
             <button
               onClick={() => {
                 setSearch("");
                 setStatusFilter("");
                 setPriorityFilter("");
+                setTaskTypeFilter("");
                 setAssigneeFilter("");
                 setStartDate("");
                 setEndDate("");
@@ -502,6 +522,7 @@ export default function TasksPage() {
                   <th className="p-3.5">Lĩnh vực</th>
                   <th className="p-3.5">Người làm</th>
                   <th className="p-3.5">Hạn hoàn thành</th>
+                  <th className="p-3.5">Loại</th>
                   <th className="p-3.5">Ưu tiên</th>
                   <th className="p-3.5">Trạng thái</th>
                   <th className="p-3.5 text-right">Thao tác</th>
@@ -525,6 +546,17 @@ export default function TasksPage() {
                         {isOverdue && (
                           <span className="block text-[10px] text-red-600 font-bold uppercase">Quá hạn</span>
                         )}
+                      </td>
+                      <td className="p-3.5">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                            task.taskType === "AD_HOC"
+                              ? "bg-purple-100 text-purple-800"
+                              : "bg-teal-100 text-teal-800"
+                          }`}
+                        >
+                          {formatTaskType(task.taskType)}
+                        </span>
                       </td>
                       <td className="p-3.5">
                         <span
@@ -680,6 +712,10 @@ export default function TasksPage() {
               <div>
                 <p className="text-gray-400 font-semibold">Người thực hiện:</p>
                 <p className="font-bold text-gray-800">{viewingTask.assignee.fullName}</p>
+              </div>
+              <div>
+                <p className="text-gray-400 font-semibold">Loại công việc:</p>
+                <p className="font-bold text-gray-800">{formatTaskType(viewingTask.taskType)}</p>
               </div>
               <div>
                 <p className="text-gray-400 font-semibold">Mức độ ưu tiên:</p>
@@ -854,6 +890,18 @@ export default function TasksPage() {
                         className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl"
                       />
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">Loại công việc</label>
+                    <select
+                      value={formData.taskType}
+                      onChange={(e) => setFormData({ ...formData, taskType: e.target.value as any })}
+                      className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl"
+                    >
+                      <option value="RECURRING">Thường xuyên</option>
+                      <option value="AD_HOC">Đột xuất</option>
+                    </select>
                   </div>
 
                   <div>

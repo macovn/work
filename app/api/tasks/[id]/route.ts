@@ -58,6 +58,7 @@ export async function PATCH(
           deadline: updatedTask.deadline,
           field: updatedTask.field,
           priority: updatedTask.priority,
+          taskType: updatedTask.taskType,
           status: updatedTask.status,
           notes: updatedTask.notes,
         }).catch((err) => console.error("[Google Calendar Patch Error]:", err));
@@ -67,7 +68,11 @@ export async function PATCH(
     }
 
     // Admin update
-    const { code, title, field, assigneeId, deadline, priority, status, result, notes } = body;
+    const { code, title, field, assigneeId, deadline, priority, taskType, status, result, notes } = body;
+
+    if (taskType !== undefined && taskType !== "RECURRING" && taskType !== "AD_HOC") {
+      return NextResponse.json({ error: "Loại công việc không hợp lệ (RECURRING hoặc AD_HOC)" }, { status: 400 });
+    }
 
     const updatedTask = await prisma.task.update({
       where: { id: taskId },
@@ -78,6 +83,7 @@ export async function PATCH(
         ...(assigneeId && { assigneeId }),
         ...(deadline && { deadline: new Date(deadline) }),
         ...(priority && { priority }),
+        ...(taskType && { taskType }),
         ...(status && { status }),
         ...(result !== undefined && { result }),
         ...(notes !== undefined && { notes }),
@@ -105,6 +111,7 @@ export async function PATCH(
           deadline: updatedTask.deadline,
           field: updatedTask.field,
           priority: updatedTask.priority,
+          taskType: updatedTask.taskType,
           status: updatedTask.status,
           notes: updatedTask.notes,
         }).catch((err) => console.error("[Google Calendar Patch Error]:", err));

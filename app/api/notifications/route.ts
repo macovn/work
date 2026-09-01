@@ -61,10 +61,14 @@ export async function PATCH(request: Request) {
     }
 
     if (notificationId) {
-      await prisma.inAppNotification.update({
-        where: { id: notificationId },
+      // updateMany + điều kiện userId để tránh IDOR (chỉ chủ nhân mới được đánh dấu đã đọc)
+      const result = await prisma.inAppNotification.updateMany({
+        where: { id: notificationId, userId: user.id },
         data: { isRead: true },
       });
+      if (result.count === 0) {
+        return NextResponse.json({ error: "Không tìm thấy thông báo" }, { status: 404 });
+      }
       return NextResponse.json({ message: "Đã đánh dấu đã đọc" });
     }
 

@@ -20,7 +20,7 @@ export function getOAuth2Client() {
 /**
  * Generates Google OAuth 2.0 consent URL for offline access & Calendar scopes
  */
-export function getGoogleAuthUrl(): string | null {
+export function getGoogleAuthUrl(state?: string): string | null {
   const oauth2Client = getOAuth2Client();
   if (!oauth2Client) return null;
 
@@ -28,6 +28,7 @@ export function getGoogleAuthUrl(): string | null {
     access_type: "offline",
     prompt: "consent",
     scope: ["https://www.googleapis.com/auth/calendar.events"],
+    ...(state ? { state } : {}),
   });
 }
 
@@ -49,6 +50,10 @@ export function getCalendarClient() {
   return google.calendar({ version: "v3", auth: oauth2Client });
 }
 
+function formatTaskTypeLabel(taskType?: string | null): string {
+  return taskType === "AD_HOC" ? "Đột xuất" : "Thường xuyên";
+}
+
 export async function createGoogleCalendarEvent(task: {
   id: string;
   code: string;
@@ -56,6 +61,7 @@ export async function createGoogleCalendarEvent(task: {
   deadline: Date;
   field: string;
   priority: string;
+  taskType?: string;
   status: string;
   notes?: string | null;
 }): Promise<string | null> {
@@ -75,7 +81,7 @@ export async function createGoogleCalendarEvent(task: {
       calendarId,
       requestBody: {
         summary: `[${task.code}] ${task.title}`,
-        description: `Mã CV: ${task.code}\nLĩnh vực: ${task.field}\nĐộ ưu tiên: ${task.priority}\nTrạng thái: ${task.status}\nGhi chú: ${task.notes || "Không có"}`,
+        description: `Mã CV: ${task.code}\nLĩnh vực: ${task.field}\nLoại công việc: ${formatTaskTypeLabel(task.taskType)}\nĐộ ưu tiên: ${task.priority}\nTrạng thái: ${task.status}\nGhi chú: ${task.notes || "Không có"}`,
         start: {
           dateTime: startDate.toISOString(),
         },
@@ -100,6 +106,7 @@ export async function updateGoogleCalendarEvent(
     deadline: Date;
     field: string;
     priority: string;
+    taskType?: string;
     status: string;
     notes?: string | null;
   }
@@ -120,7 +127,7 @@ export async function updateGoogleCalendarEvent(
       eventId: googleEventId,
       requestBody: {
         summary: `[${task.code}] ${task.title}`,
-        description: `Mã CV: ${task.code}\nLĩnh vực: ${task.field}\nĐộ ưu tiên: ${task.priority}\nTrạng thái: ${task.status}\nGhi chú: ${task.notes || "Không có"}`,
+        description: `Mã CV: ${task.code}\nLĩnh vực: ${task.field}\nLoại công việc: ${formatTaskTypeLabel(task.taskType)}\nĐộ ưu tiên: ${task.priority}\nTrạng thái: ${task.status}\nGhi chú: ${task.notes || "Không có"}`,
         start: {
           dateTime: startDate.toISOString(),
         },

@@ -20,6 +20,22 @@ export async function PATCH(
 
     const data: any = {};
 
+    // Bảo vệ Admin tối cao: chặn tự hạ quyền hoặc tự khóa tài khoản chính mình
+    if (userId === currentUser.id) {
+      if (role === "USER") {
+        return NextResponse.json(
+          { error: "Bạn không thể tự hạ quyền tài khoản Admin của chính mình" },
+          { status: 400 }
+        );
+      }
+      if (status === "LOCKED") {
+        return NextResponse.json(
+          { error: "Bạn không thể tự khóa tài khoản của chính mình" },
+          { status: 400 }
+        );
+      }
+    }
+
     if (email && typeof email === "string" && email.trim()) {
       const cleanEmail = email.trim().toLowerCase();
       const existingUser = await prisma.user.findFirst({

@@ -42,6 +42,17 @@ export function formatPriority(priority: "LOW" | "MEDIUM" | "HIGH"): string {
   }
 }
 
+export function formatTaskType(taskType: string | null | undefined): string {
+  switch (taskType) {
+    case "AD_HOC":
+      return "Đột xuất";
+    case "RECURRING":
+      return "Thường xuyên";
+    default:
+      return taskType || "Thường xuyên";
+  }
+}
+
 export function formatStatus(status: "TODO" | "IN_PROGRESS" | "PAUSED" | "COMPLETED" | "CANCELLED"): string {
   switch (status) {
     case "TODO":

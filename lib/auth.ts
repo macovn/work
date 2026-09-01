@@ -2,8 +2,8 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 import { prisma } from "./prisma";
+import { getJwtSecretString } from "./jwt-secret";
 
-const JWT_SECRET = process.env.JWT_SECRET || "default-secret-qlcv-key";
 const TOKEN_COOKIE_NAME = "auth_token";
 
 export interface JWTPayload {
@@ -21,12 +21,12 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 }
 
 export function signToken(payload: JWTPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
+  return jwt.sign(payload, getJwtSecretString(), { expiresIn: "7d" });
 }
 
 export function verifyToken(token: string): JWTPayload | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as JWTPayload;
+    return jwt.verify(token, getJwtSecretString()) as JWTPayload;
   } catch {
     return null;
   }
