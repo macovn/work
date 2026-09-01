@@ -63,7 +63,7 @@ export async function POST(request: Request) {
       console.error("[Login Alert Error]:", err);
     });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       message: "Đăng nhập thành công",
       user: {
         id: user.id,
@@ -72,8 +72,18 @@ export async function POST(request: Request) {
         role: user.role,
       },
     });
+
+    response.cookies.set("auth_token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60,
+      path: "/",
+    });
+
+    return response;
   } catch (error: any) {
     console.error("[Login API Error]:", error);
-    return NextResponse.json({ error: "Lỗi máy chủ nội bộ" }, { status: 500 });
+    return NextResponse.json({ error: error?.message || "Lỗi máy chủ nội bộ" }, { status: 500 });
   }
 }

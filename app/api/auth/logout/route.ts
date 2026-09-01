@@ -5,5 +5,13 @@ export const dynamic = "force-dynamic";
 
 export async function POST() {
   await removeAuthCookie();
-  return NextResponse.json({ message: "Đã đăng xuất" });
+  const response = NextResponse.json({ message: "Đã đăng xuất" });
+  response.cookies.set("auth_token", "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 0,
+    path: "/",
+  });
+  return response;
 }

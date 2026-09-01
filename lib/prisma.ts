@@ -9,10 +9,8 @@ const globalForPrisma = globalThis as unknown as {
 const LOCAL_DEV_DB_URL = "postgresql://postgres:acceptancetest@127.0.0.1:54332/postgres?schema=public";
 
 const dbUrl = process.env.DATABASE_URL;
-if (!dbUrl) {
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("CRITICAL ERROR: DATABASE_URL environment variable is not defined in Production!");
-  }
+if (!dbUrl && process.env.NODE_ENV === "production") {
+  console.error("[Database Warning]: DATABASE_URL environment variable is not defined in Production!");
 }
 
 export const prisma =
