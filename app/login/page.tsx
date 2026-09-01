@@ -32,10 +32,11 @@ export default function LoginPage() {
 
       if (typeof window !== "undefined") {
         sessionStorage.setItem("justLoggedIn", "true");
+        window.location.href = "/dashboard";
+      } else {
+        router.push("/dashboard");
+        router.refresh();
       }
-
-      router.push("/dashboard");
-      router.refresh();
     } catch (err: any) {
       setError("Lỗi kết nối máy chủ");
       setLoading(false);
