@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { PILOT_DAN_SO_POSITION } from "../lib/standard-task";
+import { PILOT_DAN_SO_POSITION, calculateTaskScores } from "../lib/standard-task";
 
 const prisma = new PrismaClient();
 
@@ -81,15 +81,16 @@ export async function seedStandardTaskCatalog() {
   }
 
   console.log("Seeded 14 Standard Tasks for Pilot Dân số successfully.");
+  return pos;
 }
 
 export async function runSeed() {
   console.log("Starting seed process...");
 
-  // Seed Standard Task Catalog
-  await seedStandardTaskCatalog();
+  // 1. Seed Standard Task Catalog
+  const position = await seedStandardTaskCatalog();
 
-  // 1. Create or reset default settings
+  // 2. Create or reset default settings
   await prisma.notificationSetting.upsert({
     where: { id: "default" },
     update: {},
@@ -105,11 +106,10 @@ export async function runSeed() {
     },
   });
 
-  // 2. Passwords
+  // 3. Passwords & Users
   const adminPassword = await bcrypt.hash("admin123", 10);
   const userPassword = await bcrypt.hash("user123", 10);
 
-  // 3. Create Admin
   const admin = await prisma.user.upsert({
     where: { email: "admin@example.com" },
     update: { role: "ADMIN" },
@@ -122,7 +122,6 @@ export async function runSeed() {
     },
   });
 
-  // 4. Create Users
   const user1 = await prisma.user.upsert({
     where: { email: "user1@example.com" },
     update: {},
@@ -159,154 +158,299 @@ export async function runSeed() {
     },
   });
 
-  const now = new Date();
+  // 4. XÓA TOÀN BỘ CÔNG VIỆC MẪU CŨ
+  console.log("Xóa toàn bộ công việc cũ để nạp mới 14 công việc mẫu chuẩn Dân số...");
+  await prisma.task.deleteMany({});
 
-  // Helper date calculations
+  // 5. Query 14 Standard Tasks from DB
+  const standardTasks = await prisma.standardTask.findMany({
+    where: { positionId: position.id },
+    orderBy: { code: "asc" },
+  });
+
+  const stdMap = new Map(standardTasks.map((t) => [t.code, t]));
+
+  const now = new Date();
   const addHours = (h: number) => new Date(now.getTime() + h * 60 * 60 * 1000);
   const subHours = (h: number) => new Date(now.getTime() - h * 60 * 60 * 1000);
 
-  // 5. Tasks array
-  const sampleTasks = [
+  // 6. Định nghĩa 14 Công việc mẫu thực tế tương ứng chính xác 14 Công việc/Sản phẩm chuẩn
+  const pilotTasksDefinition = [
+    // --- NHÓM 1: Thu thập và quản trị dữ liệu dân số (25%) ---
     {
-      code: "TASK-101",
-      title: "Khắc phục sự cố Server Database Supabase",
-      field: "Công nghệ thông tin",
-      assigneeId: user1.id,
-      deadline: subHours(48), // Overdue by 2 days
+      stdCode: "DS-01",
+      code: "DS-TASK-01",
+      title: "Thu thập thông tin biến động dân số Phường Bến Nghé quý 3",
+      assignee: user1,
+      deadline: addHours(4), // Sắp đến hạn hôm nay
       priority: "HIGH" as const,
-      status: "TODO" as const,
-      result: null,
-      notes: "Cần tối ưu connection pooling và index",
-    },
-    {
-      code: "TASK-102",
-      title: "Cập nhật tài liệu hợp đồng đối tác Zalo",
-      field: "Pháp lý & Cấu hình",
-      assigneeId: user1.id,
-      deadline: addHours(2), // Due in 2 hours -> WARNING LOW (within 4h window)
-      priority: "LOW" as const,
+      taskType: "RECURRING" as const,
       status: "IN_PROGRESS" as const,
-      result: "Đã soạn thảo xong 80% hợp đồng",
-      notes: "Chờ duyệt từ phòng pháp chế",
+      assignedVolume: 20,
+      completedVolume: 15,
+      result: "Đã thu thập và lập 15/20 phiếu/bộ dữ liệu thực địa",
+      notes: "Ưu tiên hoàn tất 5 bộ dữ liệu còn lại trước 17h hôm nay",
     },
     {
-      code: "TASK-103",
-      title: "Thiết kế Banner chiến dịch Q3",
-      field: "Marketing & Truyền thông",
-      assigneeId: user2.id,
-      deadline: addHours(12), // Due in 12 hours -> WARNING MEDIUM (within 24h window)
+      stdCode: "DS-02",
+      code: "DS-TASK-02",
+      title: "Nhập và cập nhật dữ liệu dân số hộ gia đình đợt 1/2026",
+      assignee: user1,
+      deadline: addHours(48),
       priority: "MEDIUM" as const,
+      taskType: "RECURRING" as const,
       status: "IN_PROGRESS" as const,
-      result: null,
-      notes: "Đang chờ ảnh từ bên dịch vụ",
+      assignedVolume: 10,
+      completedVolume: 4,
+      result: "Đã nhập 4 bộ dữ liệu vào phần mềm chuyên ngành",
+      notes: "Chờ kiểm tra chéo với dữ liệu tư pháp",
     },
     {
-      code: "TASK-104",
-      title: "Báo cáo doanh thu quý 2 năm 2026",
-      field: "Tài chính - Kế toán",
-      assigneeId: user1.id,
-      deadline: addHours(4), // Due today -> WARNING HIGH (within 48h window)
-      priority: "HIGH" as const,
-      status: "IN_PROGRESS" as const,
-      result: null,
-      notes: "Tổng hợp dữ liệu từ 3 chi nhánh",
-    },
-    {
-      code: "TASK-105",
-      title: "Kiểm tra an toàn bảo mật hệ thống API",
-      field: "Công nghệ thông tin",
-      assigneeId: user3.id,
-      deadline: addHours(48), // Due in 2 days
-      priority: "MEDIUM" as const,
-      status: "TODO" as const,
-      result: null,
-      notes: "Rà soát JWT cookie và CORS policy",
-    },
-    {
-      code: "TASK-106",
-      title: "Bảo trì định kỳ máy chủ email",
-      field: "Vận hành hệ thống",
-      assigneeId: user2.id,
-      deadline: addHours(120), // Due in 5 days
+      stdCode: "DS-03",
+      code: "DS-TASK-03",
+      title: "Kiểm tra và làm sạch dữ liệu biến động nhân khẩu tháng 8",
+      assignee: user2,
+      deadline: subHours(12), // Hoàn thành đúng hạn gần đây
       priority: "LOW" as const,
-      status: "PAUSED" as const,
-      result: null,
-      notes: "Tạm dừng do ưu tiên sự cố Database",
-    },
-    {
-      code: "TASK-107",
-      title: "Tổ chức họp giao ban đầu tháng",
-      field: "Hành chính - Nhân sự",
-      assigneeId: user3.id,
-      deadline: subHours(24),
-      priority: "LOW" as const,
+      taskType: "RECURRING" as const,
       status: "COMPLETED" as const,
-      result: "Đã hoàn thành tốt đẹp, 100% nhân sự tham gia",
-      notes: null,
+      assignedVolume: 5,
+      completedVolume: 5,
+      result: "Đã rà soát và làm sạch 100% 5/5 bộ dữ liệu, phát hiện và sửa 12 lỗi trùng lặp",
+      notes: "Dữ liệu đã sẵn sàng để tổng hợp báo cáo",
+      kpiQuantity: 100,
+      kpiProgress: 100,
+      kpiQuality: 98,
+      kpiScore: 99.4,
+      kpiComment: "Thực hiện kỹ lưỡng, độ chính xác dữ liệu rất cao",
     },
     {
-      code: "TASK-108",
-      title: "Khảo sát mặt bằng chi nhánh mới",
-      field: "Phát triển thị trường",
-      assigneeId: user2.id,
-      deadline: subHours(72),
+      stdCode: "DS-04",
+      code: "DS-TASK-04",
+      title: "Tổng hợp báo cáo số liệu dân số quý II năm 2026",
+      assignee: user2,
+      deadline: subHours(24),
+      priority: "MEDIUM" as const,
+      taskType: "RECURRING" as const,
+      status: "COMPLETED" as const,
+      assignedVolume: 2,
+      completedVolume: 2,
+      result: "Đã hoàn thành 2 bản báo cáo tổng hợp quý gửi Sở Y tế và Chi cục Dân số",
+      notes: "Báo cáo được cấp trên phê duyệt ngay trong lần nộp đầu tiên",
+      kpiQuantity: 100,
+      kpiProgress: 100,
+      kpiQuality: 95,
+      kpiScore: 98.5,
+      kpiComment: "Báo cáo đầy đủ, biểu đồ trực quan và đúng hạn",
+    },
+
+    // --- NHÓM 2: Thống kê, phân tích và dự báo dân số (45%) ---
+    {
+      stdCode: "DS-05",
+      code: "DS-TASK-05",
+      title: "Phân tích chuyên sâu biến động dân số 6 tháng đầu năm",
+      assignee: user3,
+      deadline: addHours(24),
+      priority: "HIGH" as const,
+      taskType: "RECURRING" as const,
+      status: "IN_PROGRESS" as const,
+      assignedVolume: 1,
+      completedVolume: 0.8,
+      result: "Đã hoàn thành dự thảo phần phân tích di dân và tăng tự nhiên (80%)",
+      notes: "Cần bổ sung so sánh với cùng kỳ năm 2025",
+    },
+    {
+      stdCode: "DS-06",
+      code: "DS-TASK-06",
+      title: "Phân tích cơ cấu độ tuổi và giới tính trên địa bàn quận",
+      assignee: user1,
+      deadline: addHours(72),
+      priority: "MEDIUM" as const,
+      taskType: "RECURRING" as const,
+      status: "TODO" as const,
+      assignedVolume: 1,
+      completedVolume: 0,
+      result: null,
+      notes: "Chuẩn bị nguồn số liệu điều tra mẫu",
+    },
+    {
+      stdCode: "DS-07",
+      code: "DS-TASK-07",
+      title: "Chuyên đề phân tích chỉ tiêu mức sinh và mất cân bằng giới tính khi sinh",
+      assignee: user2,
+      deadline: subHours(48), // Quá hạn
+      priority: "HIGH" as const,
+      taskType: "AD_HOC" as const,
+      status: "TODO" as const,
+      assignedVolume: 1,
+      completedVolume: 0,
+      result: null,
+      notes: "Quá hạn do đang chờ số liệu xác minh từ bệnh viện phụ sản",
+    },
+    {
+      stdCode: "DS-08",
+      code: "DS-TASK-08",
+      title: "Dự báo quy mô và nhu cầu dịch vụ dân số giai đoạn 2026-2030",
+      assignee: user3,
+      deadline: addHours(120),
+      priority: "HIGH" as const,
+      taskType: "AD_HOC" as const,
+      status: "IN_PROGRESS" as const,
+      assignedVolume: 1,
+      completedVolume: 0.5,
+      result: "Đã chạy xong mô hình dự báo dân số theo phương pháp thành phần",
+      notes: "Đang viết báo cáo thuyết minh kết quả",
+    },
+    {
+      stdCode: "DS-12",
+      code: "DS-TASK-09",
+      title: "Tổ chức điều tra khảo sát dân số thực tế tại địa bàn trọng điểm",
+      assignee: user1,
+      deadline: subHours(36),
+      priority: "MEDIUM" as const,
+      taskType: "AD_HOC" as const,
+      status: "COMPLETED" as const,
+      assignedVolume: 2,
+      completedVolume: 2,
+      result: "Đã hoàn thành 2 cuộc điều tra thực tế tại 2 khu phố đông dân cư",
+      notes: "Tỷ lệ phản hồi đạt 96.5%",
+      kpiQuantity: 100,
+      kpiProgress: 100,
+      kpiQuality: 92,
+      kpiScore: 97.6,
+      kpiComment: "Tổ chức chu đáo, dữ liệu điều tra tin cậy",
+    },
+    {
+      stdCode: "DS-13",
+      code: "DS-TASK-10",
+      title: "Lập báo cáo chuyên đề thực trạng già hóa dân số và an sinh xã hội",
+      assignee: user2,
+      deadline: addHours(168),
       priority: "LOW" as const,
+      taskType: "RECURRING" as const,
+      status: "TODO" as const,
+      assignedVolume: 1,
+      completedVolume: 0,
+      result: null,
+      notes: "Phối hợp với phòng Lao động - Thương binh và Xã hội",
+    },
+
+    // --- NHÓM 3: Kế hoạch, chương trình và đề án dân số (30%) ---
+    {
+      stdCode: "DS-09",
+      code: "DS-TASK-11",
+      title: "Xây dựng kế hoạch công tác dân số và phát triển năm 2027",
+      assignee: user3,
+      deadline: addHours(96),
+      priority: "HIGH" as const,
+      taskType: "RECURRING" as const,
+      status: "IN_PROGRESS" as const,
+      assignedVolume: 2,
+      completedVolume: 1,
+      result: "Đã hoàn thành Kế hoạch tổng thể đợt 1, đang xây dựng kế hoạch phân bổ kinh phí",
+      notes: "Trình lãnh đạo ký duyệt dự thảo lần 1",
+    },
+    {
+      stdCode: "DS-10",
+      code: "DS-TASK-12",
+      title: "Xây dựng chương trình truyền thông dân số và sức khỏe sinh sản quý IV",
+      assignee: user1,
+      deadline: addHours(144),
+      priority: "MEDIUM" as const,
+      taskType: "RECURRING" as const,
+      status: "TODO" as const,
+      assignedVolume: 1,
+      completedVolume: 0,
+      result: null,
+      notes: "Chuẩn bị tài liệu và kịch bản truyền thông cơ sở",
+    },
+    {
+      stdCode: "DS-11",
+      code: "DS-TASK-13",
+      title: "Báo cáo đánh giá kết quả thực hiện chương trình mục tiêu dân số năm 2026",
+      assignee: user2,
+      deadline: subHours(96),
+      priority: "LOW" as const,
+      taskType: "AD_HOC" as const,
       status: "CANCELLED" as const,
-      result: "Hủy theo quyết định của HĐQT",
-      notes: "Lý do: Thay đổi chiến lược kinh doanh",
+      assignedVolume: 1,
+      completedVolume: 0,
+      result: "Hủy nhiệm vụ theo công văn điều chỉnh chương trình mục tiêu của UBND",
+      notes: "Chuyển nội dung sang lồng ghép vào báo cáo tổng kết năm",
+    },
+    {
+      stdCode: "DS-14",
+      code: "DS-TASK-14",
+      title: "Xây dựng Đề án nâng cao chất lượng dân số và tầm vóc địa phương giai đoạn 2026-2030",
+      assignee: user3,
+      deadline: subHours(20),
+      priority: "HIGH" as const,
+      taskType: "AD_HOC" as const,
+      status: "COMPLETED" as const,
+      assignedVolume: 1,
+      completedVolume: 1,
+      result: "Đã hoàn thành toàn bộ hồ sơ Đề án, thẩm định và được HĐND/UBND thông qua",
+      notes: "Đề án trọng điểm cấp tỉnh/thành phố",
+      kpiQuantity: 100,
+      kpiProgress: 100,
+      kpiQuality: 100,
+      kpiScore: 100,
+      kpiComment: "Đề án xuất sắc, có tính khả thi và tác động xã hội lớn",
     },
   ];
 
-  const fields = [
-    "Công nghệ thông tin",
-    "Pháp lý & Cấu hình",
-    "Marketing & Truyền thông",
-    "Tài chính - Kế toán",
-    "Vận hành hệ thống",
-    "Hành chính - Nhân sự",
-    "Phát triển thị trường",
-  ];
-  const assignees = [user1, user2, user3];
-  const priorities = ["LOW", "MEDIUM", "HIGH"] as const;
-  const statuses = ["TODO", "IN_PROGRESS", "PAUSED", "COMPLETED", "CANCELLED"] as const;
+  for (const item of pilotTasksDefinition) {
+    const std = stdMap.get(item.stdCode);
+    if (!std) {
+      console.warn(`Warning: Standard task with code ${item.stdCode} not found.`);
+      continue;
+    }
 
-  // Keep the scenarios above, then add deterministic records so one seed action
-  // always creates the 100 demo tasks promised by the product.
-  const generatedTasks = Array.from({ length: 92 }, (_, index) => {
-    const number = index + 109;
-    const status = statuses[index % statuses.length];
+    const scores = calculateTaskScores({
+      benchmarkScore: std.benchmarkScore,
+      conversionFactor: std.conversionFactor,
+      assignedVolume: item.assignedVolume,
+      completedVolume: item.completedVolume,
+    });
 
-    return {
-      code: `TASK-${number}`,
-      title: `Công việc mẫu ${number}`,
-      field: fields[index % fields.length],
-      assigneeId: assignees[index % assignees.length].id,
-      deadline: addHours((index - 18) * 18),
-      priority: priorities[index % priorities.length],
-      status,
-      result: status === "COMPLETED" ? `Đã hoàn thành công việc mẫu ${number}` : null,
-      notes: `Dữ liệu kiểm thử cho công việc mẫu ${number}`,
-    };
-  });
-
-  for (const t of [...sampleTasks, ...generatedTasks]) {
-    await prisma.task.upsert({
-      where: { code: t.code },
-      update: {
-        title: t.title,
-        field: t.field,
-        assigneeId: t.assigneeId,
-        deadline: t.deadline,
-        priority: t.priority,
-        status: t.status,
-        result: t.result,
-        notes: t.notes,
+    await prisma.task.create({
+      data: {
+        code: item.code,
+        title: item.title,
+        field: "Dân số & Phát triển",
+        assigneeId: item.assignee.id,
+        deadline: item.deadline,
+        priority: item.priority,
+        taskType: item.taskType,
+        status: item.status,
+        result: item.result,
+        notes: item.notes,
+        positionId: std.positionId,
+        groupId: std.groupId,
+        standardTaskId: std.id,
+        unit: std.unit,
+        benchmarkScore: std.benchmarkScore,
+        complexityLevel: std.complexityLevel,
+        conversionFactor: std.conversionFactor,
+        assignedVolume: item.assignedVolume,
+        completedVolume: item.completedVolume,
+        assignedScore: scores.assignedScore,
+        completedScore: scores.completedScore,
+        completionRate: scores.completionRate,
+        ...(item.kpiScore !== undefined && {
+          kpiQuantity: item.kpiQuantity,
+          kpiProgress: item.kpiProgress,
+          kpiQuality: item.kpiQuality,
+          kpiScore: item.kpiScore,
+          kpiEvaluatorId: admin.id,
+          kpiEvaluatedAt: new Date(now.getTime() - 1000 * 60 * 60 * 6),
+          kpiComment: item.kpiComment,
+        }),
       },
-      create: t,
     });
   }
 
-  console.log("Seed finished successfully!");
+  console.log("Seed finished successfully! 14 sample tasks for Pilot Dân số created.");
 }
 
 if (require.main === module) {
