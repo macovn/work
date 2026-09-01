@@ -46,11 +46,16 @@ export async function middleware(request: NextRequest) {
     const { payload } = await jwtVerify(token, getJwtSecretBytes());
     const role = payload.role as string;
 
-    // Admin-only routes
-    if (
-      (pathname.startsWith("/users") || pathname.startsWith("/settings")) &&
-      role !== "ADMIN"
-    ) {
+    // Admin-only routes (Both UI and API endpoints)
+    const isAdminRoute =
+      pathname.startsWith("/users") ||
+      pathname.startsWith("/settings") ||
+      pathname.startsWith("/api/users") ||
+      pathname.startsWith("/api/settings") ||
+      pathname.startsWith("/api/seed") ||
+      pathname.startsWith("/api/reports/export");
+
+    if (isAdminRoute && role !== "ADMIN") {
       if (pathname.startsWith("/api/")) {
         return NextResponse.json({ error: "Forbidden: Admin access required" }, { status: 403 });
       }

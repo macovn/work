@@ -33,6 +33,16 @@ export interface NotificationChannelHandler {
 // 2. Notification Formatters (SRP)
 // ==========================================
 
+function escapeHtml(str: any): string {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 export class NotificationFormatter {
   static buildContent(user: any, task: any, notificationType: NotificationType): { subject: string; bodyText: string; taskUrl: string } {
     const taskTitle = task.title;
@@ -62,20 +72,30 @@ export class NotificationFormatter {
     const priorityFormatted = formatPriority(task.priority);
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
+    const safeSubject = escapeHtml(subject);
+    const safeFullName = escapeHtml(user.fullName);
+    const safeBodyText = escapeHtml(bodyText);
+    const safeCode = escapeHtml(task.code);
+    const safeTitle = escapeHtml(task.title);
+    const safeField = escapeHtml(task.field);
+    const safeDeadline = escapeHtml(deadlineFormatted);
+    const safePriority = escapeHtml(priorityFormatted);
+    const safeUrl = encodeURI(`${baseUrl}${taskUrl}`);
+
     return `
         <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 600px; border: 1px solid #e2e8f0; border-radius: 8px;">
-          <h2 style="color: #e53e3e;">${subject}</h2>
-          <p>Xin chào <strong>${user.fullName}</strong>,</p>
-          <p>${bodyText}</p>
+          <h2 style="color: #e53e3e;">${safeSubject}</h2>
+          <p>Xin chào <strong>${safeFullName}</strong>,</p>
+          <p>${safeBodyText}</p>
           <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
-            <tr><td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Mã CV:</td><td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${task.code}</td></tr>
-            <tr><td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Tên công việc:</td><td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${task.title}</td></tr>
-            <tr><td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Lĩnh vực:</td><td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${task.field}</td></tr>
-            <tr><td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Hạn hoàn thành:</td><td style="padding: 8px; border-bottom: 1px solid #edf2f7; color: #c53030; font-weight: bold;">${deadlineFormatted}</td></tr>
-            <tr><td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Mức độ ưu tiên:</td><td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${priorityFormatted}</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Mã CV:</td><td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${safeCode}</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Tên công việc:</td><td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${safeTitle}</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Lĩnh vực:</td><td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${safeField}</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Hạn hoàn thành:</td><td style="padding: 8px; border-bottom: 1px solid #edf2f7; color: #c53030; font-weight: bold;">${safeDeadline}</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Mức độ ưu tiên:</td><td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${safePriority}</td></tr>
           </table>
           <p style="margin-top: 20px;">
-            <a href="${baseUrl}${taskUrl}" style="background-color: #3182ce; color: white; padding: 10px 18px; text-decoration: none; border-radius: 5px; display: inline-block;">Xem chi tiết công việc</a>
+            <a href="${safeUrl}" style="background-color: #3182ce; color: white; padding: 10px 18px; text-decoration: none; border-radius: 5px; display: inline-block;">Xem chi tiết công việc</a>
           </p>
         </div>
       `;

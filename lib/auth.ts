@@ -21,12 +21,12 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 }
 
 export function signToken(payload: JWTPayload): string {
-  return jwt.sign(payload, getJwtSecretString(), { expiresIn: "7d" });
+  return jwt.sign(payload, getJwtSecretString(), { expiresIn: "7d", algorithm: "HS256" });
 }
 
 export function verifyToken(token: string): JWTPayload | null {
   try {
-    return jwt.verify(token, getJwtSecretString()) as JWTPayload;
+    return jwt.verify(token, getJwtSecretString(), { algorithms: ["HS256"] }) as JWTPayload;
   } catch {
     return null;
   }

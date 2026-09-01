@@ -90,6 +90,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Vui lòng chọn file Excel để Import" }, { status: 400 });
     }
 
+    // Giới hạn kích thước file upload tối đa 5MB (chống DoS / tràn RAM)
+    const MAX_FILE_SIZE = 5 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: "Dung lượng file vượt quá giới hạn cho phép (tối đa 5MB)" }, { status: 400 });
+    }
+
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });

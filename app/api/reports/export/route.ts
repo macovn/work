@@ -52,8 +52,17 @@ export async function GET() {
       }
     }
 
+function sanitizeExcelValue(val: any): any {
+  if (typeof val === "string") {
+    if (/^[=+\-@\t\r]/.test(val)) {
+      return `'${val}`;
+    }
+  }
+  return val;
+}
+
     const fieldRows = Object.entries(fieldMap).map(([field, stat]) => ({
-      "Lĩnh vực": field,
+      "Lĩnh vực": sanitizeExcelValue(field),
       "Tổng số công việc": stat.total,
       "Hoàn thành": stat.completed,
       "Đang thực hiện": stat.inProgress,
@@ -61,7 +70,7 @@ export async function GET() {
     }));
 
     const userRows = Object.values(userMap).map((stat) => ({
-      "Nhân sự": stat.name,
+      "Nhân sự": sanitizeExcelValue(stat.name),
       "Tổng số công việc được giao": stat.total,
       "Hoàn thành": stat.completed,
       "Đang thực hiện": stat.inProgress,

@@ -156,9 +156,22 @@ export async function resetRateLimit(key: string): Promise<void> {
   memoryResetRateLimit(key);
 }
 
-/** Trích xuất IP của client từ request (Vercel/Proxy đặt trong x-forwarded-for). */
+/** Trích xuất IP an toàn của client từ request (Ưu tiên edge reverse proxies như Vercel/Cloudflare). */
 export function getClientIp(request: Request): string {
+  const cfIp = request.headers.get("cf-connecting-ip");
+  if (cfIp) return cfIp.trim();
+
+  const vercelIp = request.headers.get("x-vercel-forwarded-for");
+  if (vercelIp) return vercelIp.split(",")[0].trim();
+
+  const realIp = request.headers.get("x-real-ip");
+  if (realIp) return realIp.trim();
+
   const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
-  return request.headers.get("x-real-ip") || "unknown";
+  if (forwarded) {
+    const parts = forwarded.split(",").map((s) => s.trim()).filter(Boolean);
+    if (parts.length > 0) return parts[parts.length - 1];
+  }
+
+  return "unknown";
 }
