@@ -3,23 +3,6 @@
  * và lib/auth.ts (Node runtime). Chỉ dùng process.env + TextEncoder để
  * đảm bảo tương thích Edge.
  */
-let ephemeralRuntimeSecret: string | null = null;
-
-function getEphemeralSecret(): string {
-  if (!ephemeralRuntimeSecret) {
-    const array = new Uint8Array(32);
-    if (typeof globalThis.crypto !== "undefined" && globalThis.crypto.getRandomValues) {
-      globalThis.crypto.getRandomValues(array);
-    } else {
-      for (let i = 0; i < 32; i++) array[i] = Math.floor(Math.random() * 256);
-    }
-    ephemeralRuntimeSecret = Array.from(array)
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-  }
-  return ephemeralRuntimeSecret;
-}
-
 const DEV_LOCAL_SECRET = "qlcv-dev-secret-key-local-only-not-for-production-use";
 
 function requireSecret(): string {
@@ -29,11 +12,16 @@ function requireSecret(): string {
   }
 
   if (process.env.NODE_ENV === "production") {
-    console.warn(
-      "[CRITICAL SECURITY WARNING]: JWT_SECRET is not configured in production environment variables! " +
-        "Using an ephemeral cryptographically random key. For session persistence across server restarts, please set JWT_SECRET."
+    // Audit fix H3: trước đây fallback về secret ngẫu nhiên theo tiến trình —
+    // Edge middleware và Node runtime (và mỗi cold start) sinh khóa khác nhau
+    // => 401 hàng loạt, toàn bộ phiên bị vô hiệu khi deploy. Fail nhanh để lộ rõ
+    // lỗi cấu hình thay vì thoái hóa im lặng.
+    console.error(
+      "[CRITICAL SECURITY ERROR]: JWT_SECRET is not configured in production environment variables!"
     );
-    return getEphemeralSecret();
+    throw new Error(
+      "[Fatal] JWT_SECRET is not configured in production. Set a stable JWT_SECRET (e.g. openssl rand -hex 32) before starting the app."
+    );
   }
 
   return DEV_LOCAL_SECRET;
