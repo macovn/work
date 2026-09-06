@@ -1,19 +1,59 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { APP_UTC_OFFSET_MS, fromLocalInputValue } from "@/lib/utils";
 import * as XLSX from "xlsx";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const user = await getCurrentUser();
     if (!user || user.role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden: Admin access required" }, { status: 403 });
     }
 
+    // Audit M12: export tôn trọng bộ lọc của báo cáo (assigneeId/field/status/
+    // month/from/to) thay vì luôn xuất toàn bộ lịch sử.
+    const { searchParams } = new URL(request.url);
+    const where: any = {};
+    const assigneeId = searchParams.get("assigneeId") || undefined;
+    const field = searchParams.get("field") || undefined;
+    const status = searchParams.get("status") || undefined;
+    const month = searchParams.get("month") || undefined;
+    const from = searchParams.get("from") || undefined;
+    const to = searchParams.get("to") || undefined;
+
+    if (assigneeId) where.assigneeId = assigneeId;
+    if (field) where.field = field;
+    if (status) where.status = status;
+
+    if (month) {
+      const mm = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(month);
+      if (!mm) {
+        return NextResponse.json({ error: "Tham số month không hợp lệ (định dạng YYYY-MM)" }, { status: 400 });
+      }
+      const year = parseInt(mm[1], 10);
+      const m = parseInt(mm[2], 10);
+      where.deadline = {
+        gte: new Date(Date.UTC(year, m - 1, 1, 0, 0, 0, 0) - APP_UTC_OFFSET_MS),
+        lte: new Date(Date.UTC(year, m, 1, 0, 0, 0, 0) - APP_UTC_OFFSET_MS - 1),
+      };
+    } else if (from || to) {
+      where.deadline = {};
+      if (from) {
+        const f = fromLocalInputValue(from);
+        if (f) where.deadline.gte = f;
+      }
+      if (to) {
+        const t = fromLocalInputValue(to);
+        if (t) where.deadline.lte = t;
+      }
+    }
+
     const now = new Date();
     const tasks = await prisma.task.findMany({
+      where,
       include: { assignee: true },
     });
 

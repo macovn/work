@@ -66,6 +66,8 @@ export async function GET(request: Request) {
       }),
 
       // Fetch user's active tasks for summary list & chart
+      // Audit M6: giới hạn số dòng trả về (2.000) theo deadline tăng dần — tránh
+      // trả toàn bộ tổ chức về RAM cho ADMIN; các count vẫn chính xác tuyệt đối.
       prisma.task.findMany({
         where: {
           ...baseWhere,
@@ -79,6 +81,8 @@ export async function GET(request: Request) {
             select: { id: true, fullName: true, email: true },
           },
         },
+        orderBy: { deadline: "asc" },
+        take: 2000,
       }),
     ]);
 
