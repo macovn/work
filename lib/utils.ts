@@ -153,3 +153,25 @@ export function formatStatus(status: "TODO" | "IN_PROGRESS" | "PAUSED" | "COMPLE
       return status;
   }
 }
+
+/**
+ * Audit H6: tải TOÀN BỘ task qua nhiều trang (server chặn limit ở 100/trang).
+ * Trả về mảng gộp đủ dữ liệu để client không âm thầm tính toán trên 100 task đầu.
+ */
+export async function fetchAllTaskRows(base: URLSearchParams = new URLSearchParams()): Promise<any[]> {
+  const rows: any[] = [];
+  let pageNo = 1;
+  const PAGE_SIZE = 100;
+  for (;;) {
+    const p = new URLSearchParams(base);
+    p.set("page", String(pageNo));
+    p.set("limit", String(PAGE_SIZE));
+    const res = await fetch(`/api/tasks?${p.toString()}`, { cache: "no-store" });
+    if (!res.ok) break;
+    const data = await res.json();
+    rows.push(...(data.tasks || []));
+    if (!data.pagination || pageNo >= data.pagination.totalPages) break;
+    pageNo += 1;
+  }
+  return rows;
+}

@@ -18,7 +18,7 @@ import {
   Tag,
   ArrowRight,
 } from "lucide-react";
-import { formatDate, formatDateOnly, formatPriority, formatStatus, toLocalInputValue } from "@/lib/utils";
+import { formatDate, formatDateOnly, formatPriority, formatStatus, toLocalInputValue, fetchAllTaskRows } from "@/lib/utils";
 
 interface CalendarTask {
   id: string;
@@ -95,19 +95,16 @@ export default function CalendarPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      params.set("page", "1");
-      params.set("limit", "1000"); // Load all tasks for calendar mapping
 
       if (assigneeFilter) params.set("assigneeId", assigneeFilter);
       if (fieldFilter) params.set("field", fieldFilter);
       if (statusFilter) params.set("status", statusFilter);
       if (priorityFilter) params.set("priority", priorityFilter);
 
-      const res = await fetch(`/api/tasks?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        setTasks(data.tasks || []);
-      }
+      // Audit H6: tải đủ toàn bộ task qua phân trang (server giới hạn 100/trang)
+      // thay vì chỉ nhận 100 task sớm nhất -> lịch không còn thiếu task.
+      const rows = await fetchAllTaskRows(params);
+      setTasks(rows as CalendarTask[]);
     } catch (e) {
       console.error(e);
     } finally {

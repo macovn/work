@@ -17,7 +17,7 @@ import {
   Edit,
   Eye,
 } from "lucide-react";
-import { formatDate, formatPriority, formatStatus } from "@/lib/utils";
+import { formatDate, formatPriority, formatStatus, fetchAllTaskRows } from "@/lib/utils";
 
 interface ReminderTask {
   id: string;
@@ -55,11 +55,9 @@ export default function WorkRemindersPage() {
   const loadTasks = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/tasks?limit=1000");
-      if (res.ok) {
-        const data = await res.json();
-        setTasks(data.tasks || []);
-      }
+      // Audit H6: tải đủ toàn bộ task (server giới hạn 100/trang) thay vì chỉ 100 đầu.
+      const rows = await fetchAllTaskRows();
+      setTasks(rows as ReminderTask[]);
     } catch (e) {
       console.error(e);
     } finally {

@@ -21,7 +21,7 @@ import {
   Award,
   TrendingUp,
 } from "lucide-react";
-import { formatDate } from "@/lib/utils";
+import { formatDate, fetchAllTaskRows } from "@/lib/utils";
 import { calculateEvaluation, EvaluationResult } from "@/lib/evaluation";
 
 interface TaskItem {
@@ -79,14 +79,13 @@ export default function ReportsPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [tasksRes, usersRes] = await Promise.all([
-        fetch("/api/tasks?limit=1000"),
+      // Audit H6: lấy ĐỦ toàn bộ task qua phân trang (server giới hạn 100/trang)
+      // để số liệu báo cáo không bị tính thiếu sau 100 task.
+      const [taskRows, usersRes] = await Promise.all([
+        fetchAllTaskRows(),
         fetch("/api/users"),
       ]);
-      if (tasksRes.ok) {
-        const data = await tasksRes.json();
-        setTasks(data.tasks || []);
-      }
+      setTasks(taskRows);
       if (usersRes.ok) {
         const uData = await usersRes.json();
         setUsers(uData.users || []);
