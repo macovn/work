@@ -130,7 +130,11 @@ export default function ReportsPage() {
       }
 
       if (fromDateFilter) {
-        if (new Date(t.deadline) < new Date(fromDateFilter)) return false;
+        // Cả 2 đầu mốc đều theo ngày địa phương của người xem (audit M16/H7):
+        // trước đây from parse theo UTC midnight còn to lại +23:59:59 local => lệch ranh giới ngày.
+        const fromStart = new Date(fromDateFilter);
+        fromStart.setHours(0, 0, 0, 0);
+        if (new Date(t.deadline) < fromStart) return false;
       }
       if (toDateFilter) {
         const toEnd = new Date(toDateFilter);

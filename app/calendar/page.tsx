@@ -18,7 +18,7 @@ import {
   Tag,
   ArrowRight,
 } from "lucide-react";
-import { formatDate, formatPriority, formatStatus } from "@/lib/utils";
+import { formatDate, formatDateOnly, formatPriority, formatStatus, toLocalInputValue } from "@/lib/utils";
 
 interface CalendarTask {
   id: string;
@@ -191,7 +191,8 @@ export default function CalendarPage() {
       isToday: boolean;
     }> = [];
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const nowLocal = new Date();
+    const todayStr = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth() + 1).padStart(2, "0")}-${String(nowLocal.getDate()).padStart(2, "0")}`;
 
     // Previous month padding days
     for (let i = startDayOfWeek - 1; i >= 0; i--) {
@@ -287,14 +288,12 @@ export default function CalendarPage() {
   // Open Edit Modal
   const openEditModal = (task: CalendarTask) => {
     setEditingTask(task);
-    const d = new Date(task.deadline);
-    const formattedDeadline = d.toISOString().slice(0, 16);
     setFormData({
       code: task.code,
       title: task.title,
       field: task.field,
       assigneeId: task.assigneeId,
-      deadline: formattedDeadline,
+      deadline: toLocalInputValue(task.deadline),
       priority: task.priority,
       status: task.status,
       result: task.result || "",
@@ -312,7 +311,7 @@ export default function CalendarPage() {
       title: "",
       field: "Công nghệ thông tin",
       assigneeId: currentUser?.id || (users[0]?.id || ""),
-      deadline: new Date().toISOString().slice(0, 16),
+      deadline: toLocalInputValue(new Date()),
       priority: "LOW",
       status: "TODO",
       result: "",
@@ -893,7 +892,7 @@ export default function CalendarPage() {
             </button>
             <div>
               <h3 className="text-lg font-bold text-gray-900">
-                Công việc ngày {formatDate(dayModalDate)}
+                Công việc ngày {formatDateOnly(dayModalDate)}
               </h3>
               <p className="text-xs text-gray-500">
                 Tổng số {(tasksByDate[dayModalDate] || []).length} công việc

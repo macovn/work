@@ -23,7 +23,7 @@ import {
   Award,
   Star,
 } from "lucide-react";
-import { formatDate, formatPriority, formatStatus, formatTaskType } from "@/lib/utils";
+import { formatDate, formatPriority, formatStatus, formatTaskType, toLocalInputValue } from "@/lib/utils";
 
 interface TaskItem {
   id: string;
@@ -303,7 +303,7 @@ export default function TasksPage() {
       title: "",
       field: "Dân số",
       assigneeId: users[0]?.id || "",
-      deadline: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
+      deadline: toLocalInputValue(new Date(Date.now() + 24 * 60 * 60 * 1000)),
       priority: "LOW",
       taskType: "RECURRING",
       status: "TODO",
@@ -330,7 +330,7 @@ export default function TasksPage() {
       title: task.title,
       field: task.field,
       assigneeId: task.assigneeId,
-      deadline: new Date(task.deadline).toISOString().slice(0, 16),
+      deadline: toLocalInputValue(task.deadline),
       priority: task.priority,
       taskType: task.taskType || "RECURRING",
       status: task.status,

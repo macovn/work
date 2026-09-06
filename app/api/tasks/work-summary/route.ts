@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { startOfLocalDay, endOfLocalDay } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -13,8 +14,9 @@ export async function GET(request: Request) {
 
     const userId = user.id;
     const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    // Ranh giới "hôm nay" theo giờ Việt Nam (audit H7), không theo TZ server.
+    const startOfToday = startOfLocalDay(now);
+    const endOfToday = endOfLocalDay(now);
     const endOf3Days = new Date(startOfToday.getTime() + 4 * 24 * 60 * 60 * 1000 - 1);
 
     // Scoped based on RBAC (Admin sees all system tasks, User sees assigned tasks)
@@ -98,7 +100,7 @@ export async function GET(request: Request) {
         if (d < startOfToday) {
           group = "OVERDUE";
           isOverdue = true;
-          const diffMs = startOfToday.getTime() - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+          const diffMs = startOfToday.getTime() - startOfLocalDay(d).getTime();
           daysOverdue = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
           timeBadgeText = daysOverdue > 1 ? `Quá hạn - Hơn ${daysOverdue} ngày` : "Quá hạn 1 ngày";
         } else if (d >= startOfToday && d <= endOfToday) {
@@ -106,12 +108,12 @@ export async function GET(request: Request) {
           timeBadgeText = "Hạn hôm nay";
         } else if (d > endOfToday && d <= endOf3Days) {
           group = "NEXT_3_DAYS";
-          const diffMs = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() - startOfToday.getTime();
+          const diffMs = startOfLocalDay(d).getTime() - startOfToday.getTime();
           daysRemaining = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
           timeBadgeText = `Còn ${daysRemaining} ngày`;
         } else {
           group = "OTHER";
-          const diffMs = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() - startOfToday.getTime();
+          const diffMs = startOfLocalDay(d).getTime() - startOfToday.getTime();
           daysRemaining = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
           timeBadgeText = `Còn ${daysRemaining} ngày`;
         }

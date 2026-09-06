@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { createGoogleCalendarEvent } from "@/lib/google-calendar";
 import { NotificationEngine } from "@/lib/notification-engine";
 import { calculateTaskScores, getConversionFactorByComplexity } from "@/lib/standard-task";
+import { fromLocalInputValue } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -54,8 +55,15 @@ export async function GET(request: Request) {
 
     if (startDate || endDate) {
       where.deadline = {};
-      if (startDate) where.deadline.gte = new Date(startDate);
-      if (endDate) where.deadline.lte = new Date(endDate);
+      // Naive "YYYY-MM-DD"/"YYYY-MM-DDTHH:mm" từ client được hiểu theo giờ Việt Nam (audit H7)
+      if (startDate) {
+        const s = fromLocalInputValue(startDate);
+        if (s) where.deadline.gte = s;
+      }
+      if (endDate) {
+        const e = fromLocalInputValue(endDate);
+        if (e) where.deadline.lte = e;
+      }
     }
 
     if (search) {
@@ -154,6 +162,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Thiếu các thông tin bắt buộc" }, { status: 400 });
     }
 
+    // Deadline naive được hiểu theo giờ Việt Nam (audit H7) — không phụ thuộc TZ server.
+    const parsedDeadline = fromLocalInputValue(deadline);
+    if (!parsedDeadline) {
+      return NextResponse.json({ error: "Deadline không hợp lệ" }, { status: 400 });
+    }
+
     const existingCode = await prisma.task.findUnique({
       where: { code: code.trim() },
     });
@@ -204,7 +218,7 @@ export async function POST(request: Request) {
         id: "",
         code: code.trim(),
         title: title.trim(),
-        deadline: new Date(deadline),
+        deadline: parsedDeadline,
         field: field.trim(),
         priority: priority || "LOW",
         taskType: taskType || "RECURRING",
@@ -219,7 +233,7 @@ export async function POST(request: Request) {
         title: title.trim(),
         field: field.trim(),
         assigneeId,
-        deadline: new Date(deadline),
+        deadline: parsedDeadline,
         priority: priority || "LOW",
         taskType: taskType || "RECURRING",
         status: status || "TODO",

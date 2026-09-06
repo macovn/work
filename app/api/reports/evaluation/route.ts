@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { calculateEvaluation } from "@/lib/evaluation";
+import { APP_UTC_OFFSET_MS } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -33,17 +34,20 @@ export async function GET(request: Request) {
     }
 
     if (month) {
-      const [yearStr, monthStr] = month.split("-");
-      const year = parseInt(yearStr, 10);
-      const m = parseInt(monthStr, 10);
-      if (!isNaN(year) && !isNaN(m)) {
-        const startOfMonth = new Date(year, m - 1, 1);
-        const endOfMonth = new Date(year, m, 0, 23, 59, 59, 999);
-        where.deadline = {
-          gte: startOfMonth,
-          lte: endOfMonth,
-        };
+      // Chỉ chấp nhận định dạng YYYY-MM hợp lệ (audit M16/H7) — không im lặng bỏ qua.
+      const mm = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(month);
+      if (!mm) {
+        return NextResponse.json({ error: "Tham số month không hợp lệ (định dạng YYYY-MM)" }, { status: 400 });
       }
+      const year = parseInt(mm[1], 10);
+      const m = parseInt(mm[2], 10);
+      // Ranh giới tháng theo giờ Việt Nam (audit H7): [00:00 ngày 1, 00:00 ngày 1 tháng sau)
+      const startOfMonth = new Date(Date.UTC(year, m - 1, 1, 0, 0, 0, 0) - APP_UTC_OFFSET_MS);
+      const endOfMonth = new Date(Date.UTC(year, m, 1, 0, 0, 0, 0) - APP_UTC_OFFSET_MS - 1);
+      where.deadline = {
+        gte: startOfMonth,
+        lte: endOfMonth,
+      };
     }
 
     const tasks = await prisma.task.findMany({

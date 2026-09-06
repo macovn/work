@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { updateGoogleCalendarEvent, deleteGoogleCalendarEvent } from "@/lib/google-calendar";
 import { NotificationEngine } from "@/lib/notification-engine";
+import { fromLocalInputValue } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -122,6 +123,15 @@ export async function PATCH(
     let snapComplexityLevel = complexityLevel !== undefined ? complexityLevel : task.complexityLevel;
     let snapConversionFactor = conversionFactor !== undefined ? (conversionFactor !== null ? Number(conversionFactor) : null) : task.conversionFactor;
 
+    // Deadline naive được hiểu theo giờ Việt Nam (audit H7).
+    let parsedDeadline: Date | null = null;
+    if (deadline !== undefined) {
+      parsedDeadline = fromLocalInputValue(deadline);
+      if (!parsedDeadline) {
+        return NextResponse.json({ error: "Deadline không hợp lệ" }, { status: 400 });
+      }
+    }
+
     if (standardTaskId && standardTaskId !== task.standardTaskId) {
       const stdTask = await prisma.standardTask.findUnique({
         where: { id: standardTaskId },
@@ -165,7 +175,7 @@ export async function PATCH(
         ...(title && { title: title.trim() }),
         ...(field && { field: field.trim() }),
         ...(assigneeId && { assigneeId }),
-        ...(deadline && { deadline: new Date(deadline) }),
+        ...(parsedDeadline && { deadline: parsedDeadline }),
         ...(priority && { priority }),
         ...(taskType && { taskType }),
         ...(status && { status }),
