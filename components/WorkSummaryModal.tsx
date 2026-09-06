@@ -127,6 +127,19 @@ export function WorkSummaryModal({ isOpen, onClose }: WorkSummaryModalProps) {
     }
   }, [isOpen, fetchSummary]);
 
+  // Audit L3: đóng modal phải reset trạng thái lồng nhau (chi tiết/cập nhật),
+  // tránh lần mở sau hiện lại overlay của phiên cũ.
+  useEffect(() => {
+    if (!isOpen) {
+      setViewingTask(null);
+      setUpdatingTask(null);
+      setUpdateFormData({ status: "COMPLETED", result: "", notes: "" });
+      setError("");
+      setSubmittingUpdate(false);
+      setActiveGroupFilter(null);
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const assignees = Array.from(
@@ -161,9 +174,14 @@ export function WorkSummaryModal({ isOpen, onClose }: WorkSummaryModalProps) {
       });
       if (res.ok) {
         fetchSummary();
+      } else {
+        // Audit L3: không nuốt lỗi im lặng — hiển thị lý do cho người dùng.
+        const errData = await res.json().catch(() => ({}));
+        setError(errData.error || "Không thể cập nhật trạng thái công việc");
       }
     } catch (e) {
       console.error(e);
+      setError("Lỗi kết nối khi cập nhật công việc");
     }
   };
 
@@ -171,6 +189,7 @@ export function WorkSummaryModal({ isOpen, onClose }: WorkSummaryModalProps) {
     e.preventDefault();
     if (!updatingTask) return;
     setSubmittingUpdate(true);
+    setError("");
     try {
       const res = await fetch(`/api/tasks/${updatingTask.id}`, {
         method: "PATCH",
@@ -180,9 +199,14 @@ export function WorkSummaryModal({ isOpen, onClose }: WorkSummaryModalProps) {
       if (res.ok) {
         setUpdatingTask(null);
         fetchSummary();
+      } else {
+        // Audit L3: hiển thị lỗi thay vì để modal đứng im không phản hồi.
+        const errData = await res.json().catch(() => ({}));
+        setError(errData.error || "Không thể cập nhật công việc");
       }
     } catch (e) {
       console.error(e);
+      setError("Lỗi kết nối khi cập nhật công việc");
     } finally {
       setSubmittingUpdate(false);
     }

@@ -155,9 +155,14 @@ export default function WorkRemindersPage() {
       if (res.ok) {
         setUpdatingTask(null);
         loadTasks();
+      } else {
+        // Audit L3: không nuốt lỗi — modal đóng mở vẫn phải báo rõ cho người dùng.
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.error || "Không thể cập nhật công việc");
       }
     } catch (e) {
       console.error(e);
+      alert("Lỗi kết nối khi cập nhật công việc");
     } finally {
       setIsSubmitting(false);
     }
