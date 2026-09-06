@@ -69,6 +69,7 @@ model User {
   email            String            @unique
   passwordHash     String
   fullName         String
+  zaloId           String?           // Zalo user_id (OA) — audit H9: recipient thật cho kênh Zalo
   role             Role              @default(USER)
   status           UserStatus        @default(ACTIVE)
   createdAt        DateTime          @default(now())

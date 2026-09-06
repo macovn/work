@@ -16,6 +16,7 @@ export async function GET() {
         id: true,
         email: true,
         fullName: true,
+        zaloId: true,
         role: true,
         status: true,
         createdAt: true,
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { email, password, fullName, role, status } = body;
+    const { email, password, fullName, role, status, zaloId } = body;
 
     if (!email || !password || !fullName) {
       return NextResponse.json({ error: "Thiếu thông tin bắt buộc" }, { status: 400 });
@@ -66,11 +67,14 @@ export async function POST(request: Request) {
         role: role === "ADMIN" ? "ADMIN" : "USER",
         // Audit M15: tôn trọng lựa chọn trạng thái từ form (trước đây luôn ACTIVE).
         status: status === "LOCKED" ? "LOCKED" : "ACTIVE",
+        // Audit H9: Zalo user_id tùy chọn (bỏ trống = không nhận Zalo).
+        zaloId: zaloId && String(zaloId).trim() ? String(zaloId).trim() : null,
       },
       select: {
         id: true,
         email: true,
         fullName: true,
+        zaloId: true,
         role: true,
         status: true,
         createdAt: true,

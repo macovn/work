@@ -7,6 +7,7 @@ interface UserItem {
   id: string;
   email: string;
   fullName: string;
+  zaloId?: string | null;
   role: "ADMIN" | "USER";
   status: "ACTIVE" | "LOCKED";
   createdAt: string;
@@ -23,6 +24,7 @@ export default function UsersPage() {
     email: "",
     fullName: "",
     password: "",
+    zaloId: "",
     role: "USER" as "ADMIN" | "USER",
     status: "ACTIVE" as "ACTIVE" | "LOCKED",
   });
@@ -55,6 +57,7 @@ export default function UsersPage() {
       email: "",
       fullName: "",
       password: "",
+      zaloId: "",
       role: "USER",
       status: "ACTIVE",
     });
@@ -68,6 +71,7 @@ export default function UsersPage() {
       email: u.email,
       fullName: u.fullName,
       password: "",
+      zaloId: u.zaloId || "",
       role: u.role,
       status: u.status,
     });
@@ -112,6 +116,7 @@ export default function UsersPage() {
             fullName: formData.fullName,
             role: formData.role,
             status: formData.status,
+            zaloId: formData.zaloId,
             ...(formData.password && { password: formData.password }),
           }),
         });
@@ -252,6 +257,19 @@ export default function UsersPage() {
                   required
                   value={formData.fullName}
                   onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  Zalo ID (user_id OA) — để nhận thông báo Zalo <span className="font-normal text-gray-400">(tùy chọn)</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.zaloId}
+                  onChange={(e) => setFormData({ ...formData, zaloId: e.target.value })}
+                  placeholder="Ví dụ: 1234567890123456789"
                   className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl"
                 />
               </div>

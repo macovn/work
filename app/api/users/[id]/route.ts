@@ -16,7 +16,7 @@ export async function PATCH(
 
     const userId = params.id;
     const body = await request.json();
-    const { email, fullName, role, status, password } = body;
+    const { email, fullName, role, status, password, zaloId } = body;
 
     const data: any = {};
 
@@ -54,6 +54,10 @@ export async function PATCH(
     if (role && (role === "ADMIN" || role === "USER")) data.role = role;
     if (status && (status === "ACTIVE" || status === "LOCKED")) data.status = status;
     if (password) data.passwordHash = await hashPassword(password);
+    // Audit H9: Zalo user_id — chuỗi trống/null = xóa (không nhận Zalo).
+    if (zaloId !== undefined) {
+      data.zaloId = zaloId && String(zaloId).trim() ? String(zaloId).trim() : null;
+    }
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
@@ -62,6 +66,7 @@ export async function PATCH(
         id: true,
         email: true,
         fullName: true,
+        zaloId: true,
         role: true,
         status: true,
         updatedAt: true,

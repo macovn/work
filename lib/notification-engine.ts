@@ -216,13 +216,14 @@ export class EmailChannelHandler implements NotificationChannelHandler {
 export class ZaloChannelHandler implements NotificationChannelHandler {
   channelName = "ZALO";
 
-  isEnabled(settings: any): boolean {
-    return Boolean(settings.enableZalo);
+  isEnabled(settings: any, user: any): boolean {
+    // Audit H9: chỉ bật khi user có Zalo user_id thật — không gửi email làm recipient.
+    return Boolean(settings.enableZalo && user && user.zaloId);
   }
 
   async send(ctx: ChannelContext): Promise<void> {
     const result = await sendZaloNotification({
-      phoneOrUserZaloId: ctx.user.email,
+      phoneOrUserZaloId: ctx.user.zaloId,
       message: `${ctx.subject}\n${ctx.bodyText}`,
     });
 
