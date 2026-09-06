@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { email, password, fullName, role } = body;
+    const { email, password, fullName, role, status } = body;
 
     if (!email || !password || !fullName) {
       return NextResponse.json({ error: "Thiếu thông tin bắt buộc" }, { status: 400 });
@@ -64,7 +64,8 @@ export async function POST(request: Request) {
         passwordHash,
         fullName: fullName.trim(),
         role: role === "ADMIN" ? "ADMIN" : "USER",
-        status: "ACTIVE",
+        // Audit M15: tôn trọng lựa chọn trạng thái từ form (trước đây luôn ACTIVE).
+        status: status === "LOCKED" ? "LOCKED" : "ACTIVE",
       },
       select: {
         id: true,

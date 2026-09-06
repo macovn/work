@@ -266,6 +266,15 @@ export default function TasksPage() {
     loadTasks();
   }, [loadTasks]);
 
+  // Audit M18: đóng modal chi tiết phải xóa luôn ?id= trên URL, nếu không mọi
+  // lần tải lại danh sách sẽ tự mở lại modal và "khóa" list vào 1 task.
+  const closeDetailModal = () => {
+    setViewingTask(null);
+    if (searchParams.get("id")) {
+      router.replace("/tasks");
+    }
+  };
+
   const handleStandardTaskChange = (stdTaskId: string) => {
     if (!stdTaskId) {
       setFormData((prev) => ({
@@ -842,7 +851,7 @@ export default function TasksPage() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl relative">
             <button
-              onClick={() => setViewingTask(null)}
+              onClick={closeDetailModal}
               className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"
             >
               <X className="w-5 h-5" />
@@ -1000,7 +1009,7 @@ export default function TasksPage() {
             )}
             <div className="pt-2 text-right">
               <button
-                onClick={() => setViewingTask(null)}
+                onClick={closeDetailModal}
                 className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold text-xs rounded-xl"
               >
                 Đóng

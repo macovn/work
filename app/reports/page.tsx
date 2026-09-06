@@ -413,7 +413,16 @@ export default function ReportsPage() {
           </button>
 
           <a
-            href="/api/reports/export"
+            href={`/api/reports/export?${(() => {
+              const q = new URLSearchParams();
+              if (assigneeFilter) q.set("assigneeId", assigneeFilter);
+              if (fieldFilter) q.set("field", fieldFilter);
+              if (statusFilter) q.set("status", statusFilter);
+              if (kpiMonthFilter) q.set("month", kpiMonthFilter);
+              if (fromDateFilter) q.set("from", fromDateFilter);
+              if (toDateFilter) q.set("to", toDateFilter);
+              return q.toString();
+            })()}`}
             download="Bao_Cao_Quan_Ly_Cong_Viec.xlsx"
             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-2 transition cursor-pointer"
           >
