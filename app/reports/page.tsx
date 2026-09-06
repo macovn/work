@@ -181,6 +181,7 @@ export default function ReportsPage() {
     const total = filteredTasks.length;
     let completed = 0;
     let open = 0; // TODO + IN_PROGRESS + PAUSED
+    let cancelled = 0;
     let overdue = 0;
     let next3Days = 0;
     let completedOnTime = 0;
@@ -199,6 +200,9 @@ export default function ReportsPage() {
     filteredTasks.forEach((t) => {
       const d = new Date(t.deadline);
       const isOverdue = t.status !== "COMPLETED" && t.status !== "CANCELLED" && d < startOfToday;
+
+      // Audit L4: tách riêng task đã hủy để không làm méo tỷ lệ/mẫu số.
+      if (t.status === "CANCELLED") cancelled++;
 
       if (t.status === "COMPLETED") {
         completed++;
@@ -225,7 +229,8 @@ export default function ReportsPage() {
         dueToday++;
       }
 
-      if (!t.result || !t.result.trim()) {
+      // Audit L4: "Chưa có kết quả" chỉ tính task đang mở (không tính task đã hủy).
+      if (t.status !== "COMPLETED" && t.status !== "CANCELLED" && (!t.result || !t.result.trim())) {
         noResult++;
       }
 
@@ -234,7 +239,9 @@ export default function ReportsPage() {
       if (t.priority === "LOW") lowPriorityCount++;
     });
 
-    const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+    // Audit L4: mẫu số tỷ lệ hoàn thành không gồm task đã hủy.
+    const activeTotal = Math.max(0, total - cancelled);
+    const completionRate = activeTotal > 0 ? Math.round((completed / activeTotal) * 100) : 0;
     const onTimeRate = completed > 0 ? Math.round((completedOnTime / completed) * 100) : 0;
 
     return {
@@ -255,6 +262,8 @@ export default function ReportsPage() {
       highPriorityCount,
       mediumPriorityCount,
       lowPriorityCount,
+      cancelledCount: cancelled,
+      openNotOverdue: Math.max(0, total - completed - overdue - cancelled),
     };
   }, [filteredTasks]);
 
@@ -336,7 +345,9 @@ export default function ReportsPage() {
 
     return Object.values(map)
       .map((emp) => {
-        const completionRate = emp.total > 0 ? Math.round((emp.completed / emp.total) * 100) : 0;
+        // Audit L4: mẫu số tỷ lệ không gồm task đã hủy.
+        const activeDenom = emp.tasks.filter((t2) => t2.status !== "CANCELLED").length;
+        const completionRate = activeDenom > 0 ? Math.round((emp.completed / activeDenom) * 100) : 0;
         const onTimeRate = emp.completed > 0 ? Math.round((emp.completedOnTime / emp.completed) * 100) : 0;
         const evaluation = calculateEvaluation(
           emp.tasks.map((t) => ({
@@ -366,15 +377,15 @@ export default function ReportsPage() {
       });
   }, [filteredTasks, users, employeeSearch]);
 
-  // Donut 1 Percentages (Status)
+  // Donut 1 Percentages (Status) — Audit M17: các nhóm LOẠI TRỪ lẫn nhau:
+  // Đã hoàn thành | Quá hạn (đang mở) | Đang mở khác | Đã hủy.
   const statusPercents = useMemo(() => {
     const tot = metrics.total || 1;
     return {
       completed: Math.round((metrics.completed / tot) * 100),
-      inProgress: Math.round((metrics.inProgressCount / tot) * 100),
       overdue: Math.round((metrics.overdue / tot) * 100),
-      paused: Math.round((metrics.paused / tot) * 100),
-      todo: Math.round((metrics.todoCount / tot) * 100),
+      openNotOverdue: Math.round((metrics.openNotOverdue / tot) * 100),
+      cancelled: Math.round((metrics.cancelledCount / tot) * 100),
     };
   }, [metrics]);
 
@@ -839,20 +850,7 @@ export default function ReportsPage() {
                     strokeDashoffset="0"
                   />
                 )}
-                {/* In Progress (Cyan) */}
-                {statusPercents.inProgress > 0 && (
-                  <circle
-                    cx="60"
-                    cy="60"
-                    r="46"
-                    fill="none"
-                    stroke="#0284c7"
-                    strokeWidth="12"
-                    strokeDasharray={`${statusPercents.inProgress * 2.89} 289`}
-                    strokeDashoffset={`-${statusPercents.completed * 2.89}`}
-                  />
-                )}
-                {/* Overdue (Red) */}
+                {/* Overdue open (Red) */}
                 {statusPercents.overdue > 0 && (
                   <circle
                     cx="60"
@@ -862,7 +860,33 @@ export default function ReportsPage() {
                     stroke="#ef4444"
                     strokeWidth="12"
                     strokeDasharray={`${statusPercents.overdue * 2.89} 289`}
-                    strokeDashoffset={`-${(statusPercents.completed + statusPercents.inProgress) * 2.89}`}
+                    strokeDashoffset={`-${statusPercents.completed * 2.89}`}
+                  />
+                )}
+                {/* Open, not overdue (Cyan) */}
+                {statusPercents.openNotOverdue > 0 && (
+                  <circle
+                    cx="60"
+                    cy="60"
+                    r="46"
+                    fill="none"
+                    stroke="#0284c7"
+                    strokeWidth="12"
+                    strokeDasharray={`${statusPercents.openNotOverdue * 2.89} 289`}
+                    strokeDashoffset={`-${(statusPercents.completed + statusPercents.overdue) * 2.89}`}
+                  />
+                )}
+                {/* Cancelled (Gray) */}
+                {statusPercents.cancelled > 0 && (
+                  <circle
+                    cx="60"
+                    cy="60"
+                    r="46"
+                    fill="none"
+                    stroke="#9ca3af"
+                    strokeWidth="12"
+                    strokeDasharray={`${statusPercents.cancelled * 2.89} 289`}
+                    strokeDashoffset={`-${(statusPercents.completed + statusPercents.overdue + statusPercents.openNotOverdue) * 2.89}`}
                   />
                 )}
               </svg>
@@ -881,27 +905,21 @@ export default function ReportsPage() {
               </div>
               <div className="flex items-center justify-between text-gray-700">
                 <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-sky-600" /> Đang thực hiện
-                </span>
-                <span className="font-bold">{metrics.inProgressCount} ({statusPercents.inProgress}%)</span>
-              </div>
-              <div className="flex items-center justify-between text-gray-700">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Quá hạn
+                  <span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Quá hạn (đang mở)
                 </span>
                 <span className="font-bold">{metrics.overdue} ({statusPercents.overdue}%)</span>
               </div>
               <div className="flex items-center justify-between text-gray-700">
                 <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Tạm dừng
+                  <span className="w-2.5 h-2.5 rounded-full bg-sky-600" /> Đang mở (chưa quá hạn)
                 </span>
-                <span className="font-bold">{metrics.paused} ({statusPercents.paused}%)</span>
+                <span className="font-bold">{metrics.openNotOverdue} ({statusPercents.openNotOverdue}%)</span>
               </div>
               <div className="flex items-center justify-between text-gray-700">
                 <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-gray-300" /> Chưa thực hiện
+                  <span className="w-2.5 h-2.5 rounded-full bg-gray-400" /> Đã hủy
                 </span>
-                <span className="font-bold">{metrics.todoCount} ({statusPercents.todo}%)</span>
+                <span className="font-bold">{metrics.cancelledCount} ({statusPercents.cancelled}%)</span>
               </div>
             </div>
           </div>
