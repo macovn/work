@@ -617,14 +617,20 @@ export default function TasksPage() {
             <input
               type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setPage(1); // Audit L3: đổi filter phải về trang đầu.
+              }}
               className="px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg text-xs"
             />
             <span className="text-gray-400">&rarr;</span>
             <input
               type="date"
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                setPage(1); // Audit L3: đổi filter phải về trang đầu.
+              }}
               className="px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg text-xs"
             />
           </div>
