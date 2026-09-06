@@ -16,8 +16,7 @@ import {
   Check,
   Edit,
   Eye,
-} from "lucide-react";
-import { formatDate, formatPriority, formatStatus, fetchAllTaskRows } from "@/lib/utils";
+} from "lucide-react";import { formatDate, formatPriority, formatStatus, fetchAllTaskRows } from "@/lib/utils";
 
 interface ReminderTask {
   id: string;
@@ -68,6 +67,55 @@ export default function WorkRemindersPage() {
   useEffect(() => {
     loadTasks();
   }, [loadTasks]);
+
+  // Inbox nội bộ (audit M19): In-App notifications + nhật ký gửi (ADMIN).
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [logs, setLogs] = useState<any[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/notifications")
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        if (Array.isArray(d.inAppAlerts)) setAlerts(d.inAppAlerts);
+        if (Array.isArray(d.logs)) setLogs(d.logs);
+      })
+      .catch((e) => console.error(e));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const markAlertRead = async (id: string) => {
+    try {
+      const res = await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notificationId: id }),
+      });
+      if (res.ok) {
+        setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, isRead: true } : a)));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const markAllAlertsRead = async () => {
+    try {
+      const res = await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ markAllRead: true }),
+      });
+      if (res.ok) {
+        setAlerts((prev) => prev.map((a) => ({ ...a, isRead: true })));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   // Date thresholds
   const now = new Date();
@@ -179,6 +227,75 @@ export default function WorkRemindersPage() {
           <h1 className="text-xl font-black text-gray-900 tracking-tight">Nhắc việc - cảnh báo</h1>
           <p className="text-xs text-gray-500 font-medium">Theo dõi và xử lý các công việc cần chú ý</p>
         </div>
+      </div>
+
+      {/* INBOX NỘI BỘ (audit M19): bell "Xem tất cả & Audit Log" cần trỏ tới nơi
+          hiển thị thật các thông báo In-App + nhật ký gửi (Admin). */}
+      <div className="bg-white rounded-3xl border border-gray-200 shadow-xs overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+          <h2 className="text-sm font-black text-gray-900 flex items-center gap-2">
+            <Bell className="w-4 h-4 text-blue-600" /> Thông báo nội bộ
+            {alerts.some((a) => !a.isRead) && (
+              <span className="px-2 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full">
+                {alerts.filter((a) => !a.isRead).length} chưa đọc
+              </span>
+            )}
+          </h2>
+          {alerts.some((a) => !a.isRead) && (
+            <button
+              onClick={markAllAlertsRead}
+              className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-[11px] rounded-xl transition cursor-pointer"
+            >
+              <Check className="inline w-3 h-3 mr-1" /> Đánh dấu tất cả đã đọc
+            </button>
+          )}
+        </div>
+        {alerts.length === 0 ? (
+          <p className="px-5 py-4 text-xs text-gray-400 font-medium">Chưa có thông báo nội bộ nào.</p>
+        ) : (
+          <ul className="divide-y divide-gray-100 max-h-72 overflow-y-auto">
+            {alerts.map((a) => (
+              <li
+                key={a.id}
+                className={`flex items-start justify-between gap-3 px-5 py-3 ${a.isRead ? "bg-white" : "bg-blue-50/60"}`}
+              >
+                <a href={`/tasks?id=${a.taskId}`} className="min-w-0">
+                  <p className={`text-xs font-bold ${a.isRead ? "text-gray-600" : "text-gray-900"}`}>{a.title}</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">{a.message}</p>
+                  <p className="text-[10px] text-gray-400 mt-1">{formatDate(a.createdAt)}</p>
+                </a>
+                {!a.isRead && (
+                  <button
+                    onClick={() => markAlertRead(a.id)}
+                    className="shrink-0 px-2.5 py-1 text-[11px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition cursor-pointer"
+                  >
+                    Đã đọc
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {logs.length > 0 && (
+          <div className="border-t border-gray-100 px-5 py-3">
+            <h3 className="text-[11px] font-black text-gray-500 mb-2 flex items-center gap-1.5">
+              <Info className="w-3.5 h-3.5" /> Nhật ký gửi thông báo (Admin)
+            </h3>
+            <ul className="max-h-40 overflow-y-auto space-y-1">
+              {logs.slice(0, 30).map((lg) => (
+                <li key={lg.id} className="text-[11px] text-gray-600 flex items-center gap-2">
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${lg.status === "SENT" ? "bg-emerald-500" : "bg-red-500"}`}
+                  />
+                  <span className="truncate">
+                    {lg.user?.fullName || lg.user?.email} — {lg.task?.title || lg.task?.code} ({lg.channel})
+                  </span>
+                  <span className="ml-auto shrink-0 text-gray-400">{formatDate(lg.createdAt)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       {/* TOP 3 TREND SUMMARY CARDS */}
