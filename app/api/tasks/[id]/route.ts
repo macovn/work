@@ -287,13 +287,15 @@ export async function PATCH(
       }
     }
 
-    NotificationEngine.evaluateAndTriggerNotifications().catch((err) => {
-      console.error("[Post Patch Notification Error]:", err);
-    });
+    // Audit M1: chỉ đánh giá riêng task vừa cập nhật.
+    NotificationEngine.evaluateTaskNow(updatedTask.id);
 
     return NextResponse.json({ message: "Cập nhật công việc thành công", task: updatedTask });
   } catch (error: any) {
     console.error("[Tasks PATCH API Error]:", error);
+    if (error?.code === "P2002") {
+      return NextResponse.json({ error: "Mã công việc đã tồn tại" }, { status: 409 });
+    }
     return NextResponse.json({ error: "Lỗi khi cập nhật công việc" }, { status: 500 });
   }
 }

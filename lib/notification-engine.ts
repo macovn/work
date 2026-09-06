@@ -334,6 +334,10 @@ export class NotificationEngine {
         status: {
           notIn: ["COMPLETED", "CANCELLED"],
         },
+        // Audit M8: không gửi thông báo cho người dùng bị khóa.
+        assignee: {
+          status: "ACTIVE",
+        },
       },
       include: {
         assignee: true,
@@ -352,6 +356,35 @@ export class NotificationEngine {
           settings,
         });
       }
+    }
+  }
+
+  /**
+   * Đánh giá & gửi thông báo cho RIÊNG một task — dùng sau khi tạo/cập nhật task
+   * thay vì quét toàn bộ bảng (audit M1: giảm chồng lấn engine + chi phí).
+   */
+  static async evaluateTaskNow(taskId: string) {
+    try {
+      const task = await prisma.task.findUnique({
+        where: { id: taskId },
+        include: { assignee: true },
+      });
+      if (!task) return;
+      if (task.assignee?.status === "LOCKED") return; // Audit M8
+      const settings = await this.getSettings();
+      const evaluation = NotificationRuleEvaluator.evaluateTask(task, settings, new Date(), false);
+      if (evaluation) {
+        await this.dispatchNotificationIfEligible({
+          user: task.assignee,
+          task,
+          notificationType: evaluation.notificationType,
+          ruleKey: evaluation.ruleKey,
+          deadline: new Date(task.deadline),
+          settings,
+        });
+      }
+    } catch (err: any) {
+      console.error("[NotificationEngine evaluateTaskNow error]:", err?.message || err);
     }
   }
 
@@ -405,24 +438,7 @@ export class NotificationEngine {
   }) {
     const { user, task, notificationType, ruleKey, deadline, settings } = params;
 
-    // Deduplication check
-    const existingLog = await prisma.notificationLog.findFirst({
-      where: {
-        userId: user.id,
-        taskId: task.id,
-        notificationType,
-        ruleKey,
-        deadline,
-        status: {
-          in: ["SENT", "PENDING"],
-        },
-      },
-    });
-
-    if (existingLog) {
-      return;
-    }
-
+    // Dedupe được thực hiện THEO TỪNG KÊNH bên trong vòng lặp dưới (audit M1).
     const { subject, bodyText, taskUrl } = NotificationFormatter.buildContent(user, task, notificationType);
     const deadlineFormatted = formatDate(deadline);
     const priorityFormatted = formatPriority(task.priority);
@@ -443,6 +459,24 @@ export class NotificationEngine {
     for (const channel of this.channels) {
       if (!channel.isEnabled(settings, user)) continue;
       try {
+        // Audit M1: dedupe theo ĐÚNG kênh này (SENT/PENDING). Kênh FAILED được retry,
+        // kênh được bật sau vẫn gửi được. Unique index NotificationLog là lớp chặn cuối
+        // khi 2 engine chạy chồng lấn.
+        const duplicate = await prisma.notificationLog.findFirst({
+          where: {
+            userId: user.id,
+            taskId: task.id,
+            notificationType,
+            channel: channel.channelName as any,
+            ruleKey,
+            deadline,
+            status: {
+              in: ["SENT", "PENDING"],
+            },
+          },
+        });
+        if (duplicate) continue;
+
         await channel.send(ctx);
       } catch (err: any) {
         // Cách ly lỗi: một kênh thất bại không được chặn các kênh còn lại

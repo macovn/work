@@ -206,7 +206,7 @@ model NotificationLog {
   errorMessage     String?
   createdAt        DateTime            @default(now())
 
-  @@index([userId, taskId, notificationType, ruleKey, deadline])
+  @@unique([userId, taskId, notificationType, channel, ruleKey, deadline])
 }
 
 model InAppNotification {

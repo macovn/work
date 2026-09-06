@@ -219,21 +219,6 @@ export async function POST(request: Request) {
     });
 
     const settings = await NotificationEngine.getSettings();
-    let googleEventId: string | null = null;
-
-    if (settings.googleCalendarEnabled) {
-      googleEventId = await createGoogleCalendarEvent({
-        id: "",
-        code: code.trim(),
-        title: title.trim(),
-        deadline: parsedDeadline,
-        field: field.trim(),
-        priority: priority || "LOW",
-        taskType: taskType || "RECURRING",
-        status: status || "TODO",
-        notes: notes || undefined,
-      });
-    }
 
     const newTask = await prisma.task.create({
       data: {
@@ -247,7 +232,6 @@ export async function POST(request: Request) {
         status: status || "TODO",
         result: result || null,
         notes: notes || null,
-        googleEventId,
         positionId: snapPositionId,
         groupId: snapGroupId,
         standardTaskId: snapStandardTaskId,
@@ -277,13 +261,35 @@ export async function POST(request: Request) {
       },
     });
 
-    NotificationEngine.evaluateAndTriggerNotifications().catch((err) => {
-      console.error("[Post Create Notification Error]:", err);
-    });
+    // Audit M11/H8: tạo Google Calendar event SAU khi ghi DB — nếu event lỗi, task vẫn tồn tại
+    // (không còn event mồ côi khi DB insert thất bại). Lỗi sync chỉ ảnh hưởng calendar.
+    if (settings.googleCalendarEnabled) {
+      const eventId = await createGoogleCalendarEvent({
+        id: "",
+        code: code.trim(),
+        title: title.trim(),
+        deadline: parsedDeadline,
+        field: field.trim(),
+        priority: priority || "LOW",
+        taskType: taskType || "RECURRING",
+        status: status || "TODO",
+        notes: notes || undefined,
+      });
+      if (eventId) {
+        newTask.googleEventId = eventId;
+        await prisma.task.update({ where: { id: newTask.id }, data: { googleEventId: eventId } });
+      }
+    }
+
+    // Audit M1: chỉ đánh giá riêng task vừa tạo (thay vì quét toàn bộ bảng).
+    NotificationEngine.evaluateTaskNow(newTask.id);
 
     return NextResponse.json(newTask, { status: 201 });
   } catch (error: any) {
     console.error("[Tasks POST API Error]:", error);
+    if (error?.code === "P2002") {
+      return NextResponse.json({ error: "Mã công việc đã tồn tại (trùng lặp đồng thời). Vui lòng thử mã khác." }, { status: 409 });
+    }
     return NextResponse.json({ error: "Lỗi khi tạo công việc" }, { status: 500 });
   }
 }
