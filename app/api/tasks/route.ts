@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma, ensureStandardTaskSchema } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { createGoogleCalendarEvent } from "@/lib/google-calendar";
 import { NotificationEngine } from "@/lib/notification-engine";
@@ -9,7 +9,6 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    await ensureStandardTaskSchema();
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -119,7 +118,6 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    await ensureStandardTaskSchema();
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

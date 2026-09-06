@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { prisma, ensureTaskTypeColumn } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import Link from "next/link";
 import {
@@ -21,7 +21,6 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function DashboardPage() {
-  await ensureTaskTypeColumn();
   const user = await getCurrentUser();
   if (!user) {
     redirect("/login");

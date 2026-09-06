@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import { prisma, ensureStandardTaskSchema } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    await ensureStandardTaskSchema();
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -38,7 +37,6 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    await ensureStandardTaskSchema();
     const user = await getCurrentUser();
     if (!user || user.role !== "ADMIN") {
       return NextResponse.json({ error: "Chỉ Admin mới có quyền quản trị Nhóm công việc" }, { status: 403 });
