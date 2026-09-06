@@ -191,16 +191,20 @@ export default function TasksPage() {
 
   // Fetch current user details & catalogs
   useEffect(() => {
+    let cancelled = false;
     fetch("/api/auth/me")
       .then((res) => res.json())
-      .then((data) => {
-        if (data.user) setCurrentUser(data.user);
-      });
-
-    fetch("/api/users")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.users) setUsers(data.users);
+      .then(async (data) => {
+        if (cancelled || !data.user) return;
+        setCurrentUser(data.user);
+        // Audit M14: chỉ ADMIN tải danh sách người dùng (USER gọi /api/users bị 403).
+        if (data.user.role === "ADMIN") {
+          const uRes = await fetch("/api/users");
+          if (uRes.ok) {
+            const uData = await uRes.json();
+            if (!cancelled && uData.users) setUsers(uData.users);
+          }
+        }
       })
       .catch(() => {});
 
@@ -217,6 +221,9 @@ export default function TasksPage() {
         if (Array.isArray(data)) setStandardTasks(data);
       })
       .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const loadTasks = useCallback(async () => {

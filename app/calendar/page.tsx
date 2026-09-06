@@ -76,19 +76,26 @@ export default function CalendarPage() {
 
   // Load User & Tasks
   useEffect(() => {
+    let cancelled = false;
     fetch("/api/auth/me")
       .then((res) => res.json())
-      .then((data) => {
-        if (data.user) setCurrentUser(data.user);
+      .then(async (data) => {
+        if (cancelled) return;
+        const me = data.user || null;
+        setCurrentUser(me);
+        // Audit M14: chỉ ADMIN cần danh sách người dùng — USER gọi /api/users sẽ 403.
+        if (me && me.role === "ADMIN") {
+          const uRes = await fetch("/api/users");
+          if (uRes.ok) {
+            const uData = await uRes.json();
+            if (!cancelled && uData.users) setUsers(uData.users);
+          }
+        }
       })
       .catch(() => {});
-
-    fetch("/api/users")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.users) setUsers(data.users);
-      })
-      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const loadTasks = useCallback(async () => {
@@ -500,12 +507,14 @@ export default function CalendarPage() {
               >
                 Hôm nay
               </button>
-              <button
-                onClick={openCreateModal}
-                className="px-3 py-1.5 bg-white text-blue-700 hover:bg-blue-50 font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1 cursor-pointer"
-              >
-                <Plus className="w-4 h-4" /> Thêm việc
-              </button>
+              {currentUser?.role === "ADMIN" && (
+                <button
+                  onClick={openCreateModal}
+                  className="px-3 py-1.5 bg-white text-blue-700 hover:bg-blue-50 font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" /> Thêm việc
+                </button>
+              )}
             </div>
           </div>
 
@@ -700,15 +709,19 @@ export default function CalendarPage() {
               </div>
             </div>
             <div className="pt-2 flex items-center justify-between">
-              <button
-                onClick={() => {
-                  setViewingTask(null);
-                  openEditModal(viewingTask);
-                }}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl flex items-center gap-1"
-              >
-                <Edit className="w-3.5 h-3.5" /> Chỉnh sửa
-              </button>
+              {/* Audit M14: USER chỉ xem — không hiện nút sửa toàn phần (server sẽ bỏ qua các
+                  trường title/deadline/assignee của USER, gây mất chỉnh sửa im lặng). */}
+              {currentUser?.role === "ADMIN" && (
+                <button
+                  onClick={() => {
+                    setViewingTask(null);
+                    openEditModal(viewingTask);
+                  }}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl flex items-center gap-1"
+                >
+                  <Edit className="w-3.5 h-3.5" /> Chỉnh sửa
+                </button>
+              )}
               <button
                 onClick={() => setViewingTask(null)}
                 className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold text-xs rounded-xl"
