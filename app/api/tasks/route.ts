@@ -203,6 +203,14 @@ export async function POST(request: Request) {
     const parsedAssignedVol = typeof assignedVolume === "number" ? assignedVolume : (assignedVolume ? Number(assignedVolume) : null);
     const parsedCompletedVol = typeof completedVolume === "number" ? completedVolume : (completedVolume ? Number(completedVolume) : null);
 
+    // Audit M3: từ chối số âm/NaN cho khối lượng.
+    if (parsedAssignedVol !== null && (!isFinite(parsedAssignedVol) || parsedAssignedVol < 0)) {
+      return NextResponse.json({ error: "Khối lượng giao phải là số không âm" }, { status: 400 });
+    }
+    if (parsedCompletedVol !== null && (!isFinite(parsedCompletedVol) || parsedCompletedVol < 0)) {
+      return NextResponse.json({ error: "Khối lượng hoàn thành phải là số không âm" }, { status: 400 });
+    }
+
     const scores = calculateTaskScores({
       benchmarkScore: snapBenchmarkScore,
       conversionFactor: snapConversionFactor,
@@ -276,6 +284,6 @@ export async function POST(request: Request) {
     return NextResponse.json(newTask, { status: 201 });
   } catch (error: any) {
     console.error("[Tasks POST API Error]:", error);
-    return NextResponse.json({ error: error?.message || "Lỗi khi tạo công việc" }, { status: 500 });
+    return NextResponse.json({ error: "Lỗi khi tạo công việc" }, { status: 500 });
   }
 }

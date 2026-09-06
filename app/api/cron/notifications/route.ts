@@ -35,6 +35,6 @@ export async function GET(request: Request) {
     });
   } catch (error: any) {
     console.error("[Cron Notification Error]:", error);
-    return NextResponse.json({ error: error?.message || "Cron evaluation error" }, { status: 500 });
+    return NextResponse.json({ error: "Cron evaluation error" }, { status: 500 });
   }
 }

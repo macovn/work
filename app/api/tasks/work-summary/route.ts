@@ -227,7 +227,7 @@ export async function GET(request: Request) {
   } catch (error: any) {
     console.error("[Work Summary API Error]:", error);
     return NextResponse.json(
-      { error: error?.message || "Lỗi khi lấy bảng tổng hợp công việc" },
+      { error: "Lỗi khi lấy bảng tổng hợp công việc" },
       { status: 500 }
     );
   }

@@ -32,6 +32,8 @@ export async function GET(request: Request) {
     if (field) {
       where.field = field;
     }
+    // Audit H4: chỉ đánh giá trên các công việc đã hoàn thành.
+    where.status = "COMPLETED";
 
     if (month) {
       // Chỉ chấp nhận định dạng YYYY-MM hợp lệ (audit M16/H7) — không im lặng bỏ qua.
@@ -119,6 +121,6 @@ export async function GET(request: Request) {
     });
   } catch (error: any) {
     console.error("[Evaluation API Error]:", error);
-    return NextResponse.json({ error: error?.message || "Lỗi máy chủ nội bộ" }, { status: 500 });
+    return NextResponse.json({ error: "Lỗi máy chủ nội bộ" }, { status: 500 });
   }
 }

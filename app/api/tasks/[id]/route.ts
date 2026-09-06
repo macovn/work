@@ -35,15 +35,44 @@ export async function PATCH(
       }
 
       const { status, result, notes, completedVolume } = body;
+
+      // Audit H5: task COMPLETED hoặc đã chấm KPI bị đóng băng — USER không được
+      // đổi trạng thái/khối lượng (chỉ Admin mở lại). result/notes vẫn chỉnh được.
       const parsedCompletedVol = completedVolume !== undefined ? (completedVolume !== null ? Number(completedVolume) : null) : task.completedVolume;
+      const statusChanged = status !== undefined && status !== task.status;
+      const volumeChanged = completedVolume !== undefined && parsedCompletedVol !== task.completedVolume;
+      const taskLocked = task.status === "COMPLETED" || task.kpiEvaluatedAt !== null;
+      if (taskLocked && (statusChanged || volumeChanged)) {
+        return NextResponse.json(
+          { error: "Công việc đã hoàn thành hoặc đã chấm điểm KPI — chỉ Admin mới được điều chỉnh trạng thái/khối lượng" },
+          { status: 403 }
+        );
+      }
+
+      // Audit M3: khối lượng phải là số không âm.
+      if (parsedCompletedVol !== null && (!isFinite(parsedCompletedVol) || parsedCompletedVol < 0)) {
+        return NextResponse.json({ error: "Khối lượng hoàn thành phải là số không âm" }, { status: 400 });
+      }
 
       let newCompletedScore = task.completedScore;
       let newCompletionRate = task.completionRate;
 
-      if (task.benchmarkScore && task.conversionFactor && parsedCompletedVol !== null) {
-        newCompletedScore = Number((parsedCompletedVol * task.benchmarkScore * task.conversionFactor).toFixed(2));
-        if (task.assignedScore && task.assignedScore > 0) {
-          newCompletionRate = Number(((newCompletedScore / task.assignedScore) * 100).toFixed(2));
+      if (completedVolume !== undefined) {
+        if (parsedCompletedVol === null) {
+          // Xóa khối lượng => xóa luôn snapshot điểm tránh số liệu cũ sót lại (audit M3).
+          newCompletedScore = null;
+          newCompletionRate = null;
+        } else if (task.benchmarkScore != null && task.conversionFactor != null) {
+          newCompletedScore = Number((parsedCompletedVol * task.benchmarkScore * task.conversionFactor).toFixed(2));
+          if (task.assignedScore != null && task.assignedScore > 0) {
+            newCompletionRate = Number(((newCompletedScore / task.assignedScore) * 100).toFixed(2));
+          } else {
+            newCompletionRate = null;
+          }
+        } else {
+          // Thiếu benchmark/hệ số snapshot => không để giá trị cũ sót lại.
+          newCompletedScore = null;
+          newCompletionRate = null;
         }
       }
 
@@ -150,21 +179,52 @@ export async function PATCH(
     const parsedAssignedVol = assignedVolume !== undefined ? (assignedVolume !== null ? Number(assignedVolume) : null) : task.assignedVolume;
     const parsedCompletedVol = completedVolume !== undefined ? (completedVolume !== null ? Number(completedVolume) : null) : task.completedVolume;
 
+    // Audit M3: từ chối số âm/NaN.
+    if (parsedAssignedVol !== null && (!isFinite(parsedAssignedVol) || parsedAssignedVol < 0)) {
+      return NextResponse.json({ error: "Khối lượng giao phải là số không âm" }, { status: 400 });
+    }
+    if (parsedCompletedVol !== null && (!isFinite(parsedCompletedVol) || parsedCompletedVol < 0)) {
+      return NextResponse.json({ error: "Khối lượng hoàn thành phải là số không âm" }, { status: 400 });
+    }
+    const assignedVolProvided = assignedVolume !== undefined;
+    const completedVolProvided = completedVolume !== undefined;
+
     let assignedScore = task.assignedScore;
     let completedScore = task.completedScore;
     let completionRate = task.completionRate;
 
     if (snapBenchmarkScore !== null && snapConversionFactor !== null) {
-      if (parsedAssignedVol !== null) {
+      if (parsedAssignedVol !== null && parsedCompletedVol !== null) {
         assignedScore = Number((parsedAssignedVol * snapBenchmarkScore * snapConversionFactor).toFixed(2));
-      }
-      if (parsedCompletedVol !== null) {
         completedScore = Number((parsedCompletedVol * snapBenchmarkScore * snapConversionFactor).toFixed(2));
+        if (assignedScore > 0) {
+          completionRate = Number(((completedScore / assignedScore) * 100).toFixed(2));
+        } else if (assignedScore === 0 && completedScore === 0) {
+          completionRate = 100; // Quyết định chủ dự án: giữ 0/0 = 100
+        } else {
+          completionRate = null;
+        }
+      } else if (parsedAssignedVol !== null) {
+        assignedScore = Number((parsedAssignedVol * snapBenchmarkScore * snapConversionFactor).toFixed(2));
+        completedScore = null;
+        completionRate = null;
+      } else if (parsedCompletedVol !== null) {
+        completedScore = Number((parsedCompletedVol * snapBenchmarkScore * snapConversionFactor).toFixed(2));
+        completionRate = null;
+      } else {
+        assignedScore = null;
+        completedScore = null;
+        completionRate = null;
       }
-      if (assignedScore !== null && assignedScore > 0 && completedScore !== null) {
-        completionRate = Number(((completedScore / assignedScore) * 100).toFixed(2));
-      } else if (assignedScore === 0 && completedScore === 0) {
-        completionRate = 100;
+    } else {
+      // Thiếu benchmark/hệ số: chỉ dọn snapshot khi người dùng thực sự đổi volume (audit M3).
+      if (assignedVolProvided) {
+        assignedScore = null;
+        completionRate = null;
+      }
+      if (completedVolProvided) {
+        completedScore = null;
+        completionRate = null;
       }
     }
 
@@ -234,7 +294,7 @@ export async function PATCH(
     return NextResponse.json({ message: "Cập nhật công việc thành công", task: updatedTask });
   } catch (error: any) {
     console.error("[Tasks PATCH API Error]:", error);
-    return NextResponse.json({ error: error?.message || "Lỗi khi cập nhật công việc" }, { status: 500 });
+    return NextResponse.json({ error: "Lỗi khi cập nhật công việc" }, { status: 500 });
   }
 }
 

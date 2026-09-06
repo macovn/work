@@ -116,24 +116,21 @@ export interface EvaluationResult {
 /**
  * Tính toán Đánh giá và Xếp loại kết quả theo đúng Work Order:
  * 
- * QUY TẮC BẮT BUỘC:
- * - Trọng số đã được áp dụng trong quá trình hình thành điểm của các nhóm nhiệm vụ.
- * - KHÔNG nhân trọng số thêm một lần nữa.
- * - KHÔNG tạo thêm cột "Trọng số" cho từng nhiệm vụ.
- * - KHÔNG tạo tầng trọng số mới.
+ * QUY TẮC BẮT BUỘC (đã chốt lại sau audit H4/M13):
+ * - Chỉ các công việc có status = COMPLETED được đưa vào đánh giá.
+ *   Task chưa hoàn thành / PAUSED / CANCELLED bị loại khỏi cả S_tb lẫn KPI_tb.
+ * - Điểm của một task: ưu tiên taskScore > completedScore. KHÔNG dùng
+ *   assignedScore làm điểm "đã thực hiện" (trước đây gây rating sai khi
+ *   task chưa hoàn thành vẫn được tính trọn điểm giao).
+ * - Trọng số đã được áp dụng trong quá trình hình thành điểm của các nhóm nhiệm vụ
+ *   (chưa áp dụng JobTaskGroup.weight ở tầng này cho tới khi chốt công thức M13).
  * 
- * 1. ĐIỂM TRUNG BÌNH THEO TRỌNG SỐ (S_tb):
- *    = Trung bình cộng của các điểm đã được tính theo trọng số.
- *    (Ví dụ: 90, 80, 70 => (90 + 80 + 70)/3 = 80.00)
- * 
+ * 1. ĐIỂM TRUNG BÌNH (S_tb):
+ *    = Trung bình cộng của các điểm hợp lệ của task COMPLETED.
  * 2. KPI TRUNG BÌNH (KPI_tb):
- *    = Tổng KPI % / số nhiệm vụ có KPI hợp lệ.
- *    (Ví dụ: 95%, 90%, 85% => (95 + 90 + 85)/3 = 90.00%)
- * 
+ *    = Tổng KPI % / số task COMPLETED có KPI hợp lệ.
  * 3. TỔNG ĐIỂM (T):
  *    = S_tb * (KPI_tb / 100)
- *    (Ví dụ: 80.00 * 90.00% = 72.00)
- * 
  * 4. XẾP LOẠI:
  *    = classifyPerformance(T)
  */
@@ -151,17 +148,18 @@ export function calculateEvaluation(tasks: TaskEvaluationItem[]): EvaluationResu
     };
   }
 
-  // 1. Trích xuất danh sách điểm đã tính theo trọng số của các nhiệm vụ hợp lệ
-  // Ưu tiên: taskScore > completedScore > assignedScore
+  // Audit H4: chỉ giữ task COMPLETED (status undefined = caller không cung cấp -> giữ như cũ).
+  const completedTasks = tasks.filter((t) => !t.status || t.status === "COMPLETED");
+
+  // 1. Trích xuất danh sách điểm của các task COMPLETED hợp lệ
+  // Ưu tiên: taskScore > completedScore (KHÔNG fallback assignedScore).
   const scoreValues: number[] = [];
-  for (const t of tasks) {
+  for (const t of completedTasks) {
     let s: number | null = null;
     if (typeof t.taskScore === "number" && !isNaN(t.taskScore)) {
       s = t.taskScore;
     } else if (typeof t.completedScore === "number" && !isNaN(t.completedScore)) {
       s = t.completedScore;
-    } else if (typeof t.assignedScore === "number" && !isNaN(t.assignedScore)) {
-      s = t.assignedScore;
     }
 
     if (s !== null && s >= 0) {
@@ -169,9 +167,9 @@ export function calculateEvaluation(tasks: TaskEvaluationItem[]): EvaluationResu
     }
   }
 
-  // 2. Trích xuất danh sách KPI % hợp lệ của các nhiệm vụ
+  // 2. Trích xuất danh sách KPI % hợp lệ của các task COMPLETED
   const kpiValues: number[] = [];
-  for (const t of tasks) {
+  for (const t of completedTasks) {
     if (typeof t.kpiScore === "number" && !isNaN(t.kpiScore) && t.kpiScore >= 0) {
       kpiValues.push(t.kpiScore);
     }
@@ -181,7 +179,7 @@ export function calculateEvaluation(tasks: TaskEvaluationItem[]): EvaluationResu
   if (scoreValues.length === 0 || kpiValues.length === 0) {
     return {
       hasEnoughData: false,
-      totalTasks: tasks.length,
+      totalTasks: completedTasks.length,
       validScoreCount: scoreValues.length,
       validKpiCount: kpiValues.length,
       weightedAverageScore: scoreValues.length > 0 ? Number((scoreValues.reduce((a, b) => a + b, 0) / scoreValues.length).toFixed(2)) : null,
@@ -207,7 +205,7 @@ export function calculateEvaluation(tasks: TaskEvaluationItem[]): EvaluationResu
 
   return {
     hasEnoughData: true,
-    totalTasks: tasks.length,
+    totalTasks: completedTasks.length,
     validScoreCount: scoreValues.length,
     validKpiCount: kpiValues.length,
     weightedAverageScore,

@@ -23,7 +23,7 @@ export async function POST() {
     });
   } catch (error: any) {
     console.error("[Seed API Error]:", error);
-    return NextResponse.json({ error: error?.message || "Lỗi khởi tạo dữ liệu mẫu" }, { status: 500 });
+    return NextResponse.json({ error: "Lỗi khởi tạo dữ liệu mẫu" }, { status: 500 });
   }
 }
 
@@ -42,6 +42,6 @@ export async function DELETE() {
     });
   } catch (error: any) {
     console.error("[Seed DELETE API Error]:", error);
-    return NextResponse.json({ error: error?.message || "Lỗi khi xóa dữ liệu mẫu" }, { status: 500 });
+    return NextResponse.json({ error: "Lỗi khi xóa dữ liệu mẫu" }, { status: 500 });
   }
 }

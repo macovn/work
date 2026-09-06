@@ -14,6 +14,15 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Audit L1: kiểm tra RBAC TRƯỚC khi đụng dữ liệu task — tránh oracle
+    // 404/400/403 để USER dò trạng thái task bất kỳ.
+    if (currentUser.role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Bạn không có quyền chấm điểm KPI cho công việc này" },
+        { status: 403 }
+      );
+    }
+
     const taskId = params.id;
     const task = await prisma.task.findUnique({
       where: { id: taskId },
@@ -28,14 +37,6 @@ export async function POST(
       return NextResponse.json(
         { error: "Chỉ công việc đã Hoàn thành mới đủ điều kiện chấm điểm KPI" },
         { status: 400 }
-      );
-    }
-
-    // RBAC: Only ADMIN can evaluate KPI
-    if (currentUser.role !== "ADMIN") {
-      return NextResponse.json(
-        { error: "Bạn không có quyền chấm điểm KPI cho công việc này" },
-        { status: 403 }
       );
     }
 
@@ -92,7 +93,7 @@ export async function POST(
   } catch (error: any) {
     console.error("[Task KPI Evaluation API Error]:", error);
     return NextResponse.json(
-      { error: error?.message || "Lỗi khi chấm điểm KPI công việc" },
+      { error: "Lỗi khi chấm điểm KPI công việc" },
       { status: 500 }
     );
   }

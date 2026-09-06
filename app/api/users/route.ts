@@ -79,6 +79,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Tạo tài khoản thành công", user: newUser }, { status: 201 });
   } catch (error: any) {
     console.error("[Users POST API Error]:", error);
-    return NextResponse.json({ error: error?.message || "Lỗi khi tạo tài khoản" }, { status: 500 });
+    return NextResponse.json({ error: "Lỗi khi tạo tài khoản" }, { status: 500 });
   }
 }

@@ -19,6 +19,6 @@ export async function POST() {
     });
   } catch (error: any) {
     console.error("[StandardTasks Seed Error]:", error);
-    return NextResponse.json({ error: error?.message || "Lỗi nạp danh mục chuẩn" }, { status: 500 });
+    return NextResponse.json({ error: "Lỗi nạp danh mục chuẩn" }, { status: 500 });
   }
 }

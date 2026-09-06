@@ -106,6 +106,6 @@ export async function POST(request: Request) {
     return response;
   } catch (error: any) {
     console.error("[Login API Error]:", error);
-    return NextResponse.json({ error: error?.message || "Lỗi máy chủ nội bộ" }, { status: 500 });
+    return NextResponse.json({ error: "Lỗi máy chủ nội bộ" }, { status: 500 });
   }
 }
