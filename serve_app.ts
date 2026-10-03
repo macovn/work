@@ -26,6 +26,20 @@ async function start() {
   process.env.DATABASE_URL = DB_URL;
 
   console.log("1. Đang khởi động Cơ sở dữ liệu PostgreSQL...");
+  const pidFile = path.join(pgDataDir, "postmaster.pid");
+  if (fs.existsSync(pidFile)) {
+    try {
+      const net = await import("net");
+      const isPortOpen = await new Promise((res) => {
+        const s = net.createConnection({ port: DB_PORT, host: "127.0.0.1" });
+        s.once("connect", () => { s.destroy(); res(true); });
+        s.once("error", () => { s.destroy(); res(false); });
+      });
+      if (!isPortOpen) {
+        fs.unlinkSync(pidFile);
+      }
+    } catch {}
+  }
   try {
     await pg.initialise();
   } catch {}
