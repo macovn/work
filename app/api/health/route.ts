@@ -1,33 +1,33 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { ensureDatabaseSchema } from "@/lib/db-schema-sync";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const start = Date.now();
   try {
-    const users = await prisma.user.findMany({
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-        role: true,
-        status: true,
-        department: true,
-      },
-    });
-
+    await ensureDatabaseSchema();
+    const userCount = await prisma.user.count();
+    const durationMs = Date.now() - start;
     return NextResponse.json({
       status: "ok",
-      userCount: users.length,
-      users,
+      database: "connected",
+      userCount,
+      latencyMs: durationMs,
+      timestamp: new Date().toISOString(),
     });
   } catch (error: any) {
+    const durationMs = Date.now() - start;
     return NextResponse.json(
       {
         status: "error",
+        database: "unreachable",
         error: error?.message || String(error),
+        latencyMs: durationMs,
+        timestamp: new Date().toISOString(),
       },
-      { status: 500 }
+      { status: 503 }
     );
   }
 }
