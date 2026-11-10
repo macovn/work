@@ -154,6 +154,19 @@ export function formatStatus(status: "TODO" | "IN_PROGRESS" | "PAUSED" | "COMPLE
   }
 }
 
+export function formatApprovalStatus(status: string | null | undefined): string {
+  switch (status) {
+    case "PENDING":
+      return "Chờ duyệt";
+    case "APPROVED":
+      return "Đã duyệt";
+    case "REJECTED":
+      return "Từ chối";
+    default:
+      return "Đã duyệt";
+  }
+}
+
 /**
  * Audit H6: tải TOÀN BỘ task qua nhiều trang (server chặn limit ở 100/trang).
  * Trả về mảng gộp đủ dữ liệu để client không âm thầm tính toán trên 100 task đầu.

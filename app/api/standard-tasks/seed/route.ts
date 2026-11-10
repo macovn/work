@@ -15,7 +15,7 @@ export async function POST() {
 
     return NextResponse.json({
       success: true,
-      message: "Đã nạp thành công 14 công việc chuẩn cho Pilot Vị trí Dân số",
+      message: "Đã nạp thành công 19 VTVL Bậc nghề nghiệp TYT Cái Bầu (HD 07-BTCTW) & Danh mục sản phẩm chuẩn QĐ 1399/QĐ-SYT",
     });
   } catch (error: any) {
     console.error("[StandardTasks Seed Error]:", error);

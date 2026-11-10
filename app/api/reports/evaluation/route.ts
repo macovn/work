@@ -62,6 +62,11 @@ export async function GET(request: Request) {
             email: true,
           },
         },
+        group: {
+          select: {
+            weight: true,
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -74,6 +79,7 @@ export async function GET(request: Request) {
         title: t.title,
         assignedScore: t.assignedScore,
         completedScore: t.completedScore,
+        groupWeight: t.group?.weight ?? null,
         kpiScore: t.kpiScore,
         status: t.status,
       }))
@@ -98,6 +104,7 @@ export async function GET(request: Request) {
           title: t.title,
           assignedScore: t.assignedScore,
           completedScore: t.completedScore,
+          groupWeight: t.group?.weight ?? null,
           kpiScore: t.kpiScore,
           status: t.status,
         }))

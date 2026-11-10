@@ -97,6 +97,8 @@ export interface TaskEvaluationItem {
   taskScore?: number | null;
   assignedScore?: number | null;
   completedScore?: number | null;
+  // Trọng số nhóm công việc (%) từ JobTaskGroup.weight (mặc định 1 nếu không gắn nhóm)
+  groupWeight?: number | null;
   // KPI % của nhiệm vụ (0 - 100)
   kpiScore?: number | null;
   status?: string;
@@ -151,9 +153,9 @@ export function calculateEvaluation(tasks: TaskEvaluationItem[]): EvaluationResu
   // Audit H4: chỉ giữ task COMPLETED (status undefined = caller không cung cấp -> giữ như cũ).
   const completedTasks = tasks.filter((t) => !t.status || t.status === "COMPLETED");
 
-  // 1. Trích xuất danh sách điểm của các task COMPLETED hợp lệ
+  // 1. Trích xuất danh sách điểm (kèm trọng số nhóm nếu có) của các task COMPLETED hợp lệ
   // Ưu tiên: taskScore > completedScore (KHÔNG fallback assignedScore).
-  const scoreValues: number[] = [];
+  const scoreEntries: { score: number; weight: number }[] = [];
   for (const t of completedTasks) {
     let s: number | null = null;
     if (typeof t.taskScore === "number" && !isNaN(t.taskScore)) {
@@ -163,7 +165,11 @@ export function calculateEvaluation(tasks: TaskEvaluationItem[]): EvaluationResu
     }
 
     if (s !== null && s >= 0) {
-      scoreValues.push(s);
+      const w =
+        typeof t.groupWeight === "number" && !isNaN(t.groupWeight) && t.groupWeight > 0
+          ? t.groupWeight
+          : 1;
+      scoreEntries.push({ score: s, weight: w });
     }
   }
 
@@ -175,23 +181,29 @@ export function calculateEvaluation(tasks: TaskEvaluationItem[]): EvaluationResu
     }
   }
 
+  const calcWeightedAvg = (entries: { score: number; weight: number }[]) => {
+    const totalWeight = entries.reduce((acc, item) => acc + item.weight, 0);
+    if (totalWeight <= 0) return null;
+    const weightedSum = entries.reduce((acc, item) => acc + item.score * item.weight, 0);
+    return Number((weightedSum / totalWeight).toFixed(2));
+  };
+
   // Điều kiện đánh giá: Phải có ít nhất 1 điểm hợp lệ VÀ ít nhất 1 KPI hợp lệ
-  if (scoreValues.length === 0 || kpiValues.length === 0) {
+  if (scoreEntries.length === 0 || kpiValues.length === 0) {
     return {
       hasEnoughData: false,
       totalTasks: completedTasks.length,
-      validScoreCount: scoreValues.length,
+      validScoreCount: scoreEntries.length,
       validKpiCount: kpiValues.length,
-      weightedAverageScore: scoreValues.length > 0 ? Number((scoreValues.reduce((a, b) => a + b, 0) / scoreValues.length).toFixed(2)) : null,
+      weightedAverageScore: scoreEntries.length > 0 ? calcWeightedAvg(scoreEntries) : null,
       averageKpi: kpiValues.length > 0 ? Number((kpiValues.reduce((a, b) => a + b, 0) / kpiValues.length).toFixed(2)) : null,
       totalScore: null,
       rating: PERFORMANCE_RATINGS.INSUFFICIENT_DATA,
     };
   }
 
-  // Tính Điểm trung bình theo trọng số (S_tb)
-  const sumScores = scoreValues.reduce((sum, val) => sum + val, 0);
-  const weightedAverageScore = Number((sumScores / scoreValues.length).toFixed(2));
+  // Tính Điểm trung bình theo trọng số nhóm (S_tb) — Audit M13
+  const weightedAverageScore = calcWeightedAvg(scoreEntries)!;
 
   // Tính KPI trung bình (KPI_tb)
   const sumKpi = kpiValues.reduce((sum, val) => sum + val, 0);
@@ -206,7 +218,7 @@ export function calculateEvaluation(tasks: TaskEvaluationItem[]): EvaluationResu
   return {
     hasEnoughData: true,
     totalTasks: completedTasks.length,
-    validScoreCount: scoreValues.length,
+    validScoreCount: scoreEntries.length,
     validKpiCount: kpiValues.length,
     weightedAverageScore,
     averageKpi,

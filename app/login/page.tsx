@@ -46,11 +46,13 @@ export default function LoginPage() {
   return (
     <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-gray-100 p-8 space-y-6">
       <div className="text-center space-y-2">
-        <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-2xl font-black mx-auto shadow-lg shadow-blue-200">
-          Q
+        <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-xl font-black mx-auto shadow-lg shadow-blue-200">
+          TYT
         </div>
-        <h2 className="text-2xl font-bold text-gray-900">Đăng Nhập Hệ Thống</h2>
-        <p className="text-sm text-gray-500">Quản lý công việc V1.2 &bull; Enterprise Task Engine</p>
+        <h2 className="text-2xl font-bold text-gray-900">Trạm Y tế Cái Bầu</h2>
+        <p className="text-xs text-gray-500 font-medium">
+          UBND đặc khu Vân Đồn &bull; Hệ thống Quản lý Công việc, KPI &amp; Đề án VTVL (HD 07-BTCTW &amp; QĐ 1399)
+        </p>
       </div>
 
       {error && (
@@ -105,7 +107,14 @@ export default function LoginPage() {
       </form>
 
       <div className="border-t border-gray-100 pt-4 space-y-3">
-        <div className="text-xs text-gray-500 text-center font-medium">Tài khoản thử nghiệm nhanh:</div>
+        <div className="p-2.5 bg-blue-50/70 border border-blue-100 rounded-xl text-center text-xs text-blue-900">
+          <span className="font-bold">Mật khẩu mặc định:</span> <code className="bg-white px-1.5 py-0.5 rounded font-mono font-bold text-blue-700">user123</code> (hoặc <code className="bg-white px-1.5 py-0.5 rounded font-mono font-bold text-blue-700">123456789</code>)
+          <div className="text-[11px] text-blue-700 mt-0.5">Tài khoản Admin: <code className="bg-white px-1.5 py-0.5 rounded font-mono font-bold">admin123</code></div>
+        </div>
+
+        <div className="text-xs text-gray-500 text-center font-medium">
+          Đăng nhập nhanh tài khoản mẫu Trạm Y tế Cái Bầu:
+        </div>
         <div className="grid grid-cols-2 gap-2 text-xs">
           <button
             type="button"
@@ -113,9 +122,9 @@ export default function LoginPage() {
               setEmail("admin@example.com");
               setPassword("admin123");
             }}
-            className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-semibold flex items-center justify-center gap-1 border border-blue-200"
+            className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-semibold flex items-center justify-center gap-1 border border-blue-200 cursor-pointer"
           >
-            <Shield className="w-3.5 h-3.5" /> Admin
+            <Shield className="w-3.5 h-3.5" /> Giám đốc (Admin)
           </button>
           <button
             type="button"
@@ -123,9 +132,29 @@ export default function LoginPage() {
               setEmail("user1@example.com");
               setPassword("user123");
             }}
-            className="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg font-semibold flex items-center justify-center gap-1 border border-emerald-200"
+            className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-semibold flex items-center justify-center gap-1 border border-indigo-200 cursor-pointer"
           >
-            <LogIn className="w-3.5 h-3.5" /> User 1
+            <Shield className="w-3.5 h-3.5" /> Phó Giám đốc
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEmail("user2@example.com");
+              setPassword("user123");
+            }}
+            className="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg font-semibold flex items-center justify-center gap-1 border border-emerald-200 cursor-pointer"
+          >
+            <LogIn className="w-3.5 h-3.5" /> Bác sĩ Bậc 4
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEmail("user3@example.com");
+              setPassword("user123");
+            }}
+            className="p-2 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg font-semibold flex items-center justify-center gap-1 border border-teal-200 cursor-pointer"
+          >
+            <LogIn className="w-3.5 h-3.5" /> Điều dưỡng Bậc 3
           </button>
         </div>
       </div>

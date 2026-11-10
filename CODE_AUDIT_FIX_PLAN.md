@@ -150,9 +150,10 @@ Chọn một quy ước duy nhất: **deadline lưu UTC instant; mọi diễn gi
 | M14 | `27d5724` | Calendar/tasks: create/edit chỉ ADMIN; chỉ tải `/api/users` khi ADMIN |
 | L3 | `a18a741`, `1478f11` | Reset modal WorkSummary + hiện lỗi PATCH; reset trang khi đổi khoảng ngày |
 | M19 | `23a8da9` | `/notifications` thành inbox nội bộ thật (in-app alerts + log Admin, đọc từng cái / đọc tất) |
+| H9 | `7b474c7` | Hoàn thiện kênh Zalo với `User.zaloId` thật |
+| M13, M12, M9, M10 | Mới triển khai | Áp trọng số nhóm `JobTaskGroup.weight` vào `calculateEvaluation`; nâng cấp Excel export (thêm KPI/Xếp loại + sheet Chi tiết CV + bỏ tải `passwordHash`); hoàn thiện đăng ký/hủy Web Push trên trình duyệt + dọn sub 404/410; thêm UI quản trị Danh mục CV chuẩn (Vị trí / Nhóm / CV chuẩn) |
 
-**Chưa triển khai (chờ quyết định nghiệp vụ của chủ dự án):**
-- M13 — áp trọng số nhóm thật: chờ công thức.
-- Phase 6 — Zalo (H9), Web Push (M10), Google Calendar (M11): chờ chọn giữ/gỡ/hoàn thiện.
-- L8 ops scripts + CSP `unsafe-inline/eval`: chờ bật đèn xanh (dev scripts đang phục vụ demo).
-- Các mục Low còn lại không gây lỗi đáng kể (đồng hồ `now` tĩnh trang nhắc việc, race guard search, settings hour input client, tháng mặc định calendar 8/2026 để giữ demo) — ghi nhận trong `CODE_AUDIT_REPORT.md` §4.
+**Chưa triển khai (tạm hoãn theo chủ đích):**
+- H1 — giữ nguyên demo (`/api/seed`, tài khoản mẫu, nút đăng nhập nhanh) để chạy test.
+- L8 ops scripts + CSP `unsafe-inline/eval`: dev scripts đang phục vụ demo.
+- Các mục Low còn lại không gây lỗi đáng kể — ghi nhận trong `CODE_AUDIT_REPORT.md` §4.

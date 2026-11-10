@@ -84,3 +84,41 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Lỗi tạo Nhóm công việc" }, { status: 500 });
   }
 }
+
+export async function PUT(request: Request) {
+  try {
+    const user = await getCurrentUser();
+    if (!user || user.role !== "ADMIN") {
+      return NextResponse.json({ error: "Chỉ Admin mới có quyền cập nhật Nhóm công việc" }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const { id, name, weight, isActive, order } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "ID nhóm công việc là bắt buộc" }, { status: 400 });
+    }
+
+    const data: any = {};
+    if (name !== undefined) data.name = String(name).trim();
+    if (weight !== undefined) {
+      const w = Number(weight);
+      if (isNaN(w) || w <= 0 || w > 100) {
+        return NextResponse.json({ error: "Trọng số nhóm phải nằm trong khoảng (0, 100]" }, { status: 400 });
+      }
+      data.weight = w;
+    }
+    if (typeof isActive === "boolean") data.isActive = isActive;
+    if (typeof order === "number" && !isNaN(order)) data.order = order;
+
+    const updated = await prisma.jobTaskGroup.update({
+      where: { id },
+      data,
+    });
+
+    return NextResponse.json(updated);
+  } catch (error: any) {
+    console.error("[JobTaskGroups PUT Error]:", error);
+    return NextResponse.json({ error: "Lỗi cập nhật Nhóm công việc" }, { status: 500 });
+  }
+}

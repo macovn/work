@@ -16,7 +16,20 @@ export async function PATCH(
 
     const userId = params.id;
     const body = await request.json();
-    const { email, fullName, role, status, password, zaloId } = body;
+    const {
+      email,
+      fullName,
+      role,
+      status,
+      password,
+      zaloId,
+      staffCode,
+      positionId,
+      qualification,
+      department,
+      workLocation,
+      concurrentHours,
+    } = body;
 
     const data: any = {};
 
@@ -50,13 +63,32 @@ export async function PATCH(
       data.email = cleanEmail;
     }
 
+    const VALID_ROLES = ["ADMIN", "DIRECTOR", "DEPUTY_DIRECTOR", "DEPARTMENT_HEAD", "USER"];
+
     if (fullName) data.fullName = fullName.trim();
-    if (role && (role === "ADMIN" || role === "USER")) data.role = role;
+    if (role && VALID_ROLES.includes(role)) data.role = role as any;
     if (status && (status === "ACTIVE" || status === "LOCKED")) data.status = status;
     if (password) data.passwordHash = await hashPassword(password);
-    // Audit H9: Zalo user_id — chuỗi trống/null = xóa (không nhận Zalo).
     if (zaloId !== undefined) {
       data.zaloId = zaloId && String(zaloId).trim() ? String(zaloId).trim() : null;
+    }
+    if (staffCode !== undefined) {
+      data.staffCode = staffCode && String(staffCode).trim() ? String(staffCode).trim() : null;
+    }
+    if (positionId !== undefined) {
+      data.positionId = positionId || null;
+    }
+    if (qualification !== undefined) {
+      data.qualification = qualification && String(qualification).trim() ? String(qualification).trim() : null;
+    }
+    if (department !== undefined) {
+      data.department = department && String(department).trim() ? String(department).trim() : "Khám bệnh";
+    }
+    if (workLocation !== undefined) {
+      data.workLocation = workLocation && String(workLocation).trim() ? String(workLocation).trim() : "Trạm chính";
+    }
+    if (concurrentHours !== undefined) {
+      data.concurrentHours = concurrentHours !== null ? Number(concurrentHours) : 120;
     }
 
     const updatedUser = await prisma.user.update({
@@ -67,6 +99,13 @@ export async function PATCH(
         email: true,
         fullName: true,
         zaloId: true,
+        staffCode: true,
+        positionId: true,
+        position: { select: { id: true, code: true, name: true, careerRank: true } },
+        qualification: true,
+        department: true,
+        workLocation: true,
+        concurrentHours: true,
         role: true,
         status: true,
         updatedAt: true,

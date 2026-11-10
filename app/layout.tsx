@@ -7,8 +7,8 @@ import { Providers } from "./providers";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Quản Lý Công Việc V1.2",
-  description: "Hệ thống quản lý công việc nhóm chuyên nghiệp",
+  title: "Trạm Y tế Cái Bầu — Quản lý Công việc, KPI & VTVL (HD 07-BTCTW & QĐ 1399)",
+  description: "Hệ thống Quản lý Công việc, Đánh giá KPI (QĐ 1399/QĐ-SYT) & Đề án Vị trí việc làm (HD 07-HD/BTCTW) của Trạm Y tế Cái Bầu - UBND đặc khu Vân Đồn",
 };
 
 export default async function RootLayout({

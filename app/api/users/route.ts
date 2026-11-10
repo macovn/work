@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
+import { isManager } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
     const currentUser = await getCurrentUser();
-    if (!currentUser || currentUser.role !== "ADMIN") {
-      return NextResponse.json({ error: "Chỉ Admin mới có quyền truy cập" }, { status: 403 });
+    if (!currentUser || !isManager(currentUser.role)) {
+      return NextResponse.json({ error: "Chỉ cấp quản lý mới có quyền truy cập" }, { status: 403 });
     }
 
     const users = await prisma.user.findMany({
@@ -17,6 +18,20 @@ export async function GET() {
         email: true,
         fullName: true,
         zaloId: true,
+        staffCode: true,
+        positionId: true,
+        position: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            careerRank: true,
+          },
+        },
+        qualification: true,
+        department: true,
+        workLocation: true,
+        concurrentHours: true,
         role: true,
         status: true,
         createdAt: true,
@@ -25,7 +40,7 @@ export async function GET() {
           select: { tasks: true },
         },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ role: "asc" }, { fullName: "asc" }],
     });
 
     return NextResponse.json({ users });
@@ -43,7 +58,20 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { email, password, fullName, role, status, zaloId } = body;
+    const {
+      email,
+      password,
+      fullName,
+      role,
+      status,
+      zaloId,
+      staffCode,
+      positionId,
+      qualification,
+      department,
+      workLocation,
+      concurrentHours,
+    } = body;
 
     if (!email || !password || !fullName) {
       return NextResponse.json({ error: "Thiếu thông tin bắt buộc" }, { status: 400 });
@@ -59,22 +87,36 @@ export async function POST(request: Request) {
 
     const passwordHash = await hashPassword(password);
 
+    const VALID_ROLES = ["ADMIN", "DIRECTOR", "DEPUTY_DIRECTOR", "DEPARTMENT_HEAD", "USER"];
+    const targetRole = VALID_ROLES.includes(role) ? role : "USER";
+
     const newUser = await prisma.user.create({
       data: {
         email: email.toLowerCase().trim(),
         passwordHash,
         fullName: fullName.trim(),
-        role: role === "ADMIN" ? "ADMIN" : "USER",
-        // Audit M15: tôn trọng lựa chọn trạng thái từ form (trước đây luôn ACTIVE).
+        role: targetRole as any,
         status: status === "LOCKED" ? "LOCKED" : "ACTIVE",
-        // Audit H9: Zalo user_id tùy chọn (bỏ trống = không nhận Zalo).
         zaloId: zaloId && String(zaloId).trim() ? String(zaloId).trim() : null,
+        staffCode: staffCode && String(staffCode).trim() ? String(staffCode).trim() : null,
+        positionId: positionId || null,
+        qualification: qualification && String(qualification).trim() ? String(qualification).trim() : null,
+        department: department && String(department).trim() ? String(department).trim() : "Khám bệnh",
+        workLocation: workLocation && String(workLocation).trim() ? String(workLocation).trim() : "Trạm chính",
+        concurrentHours: concurrentHours !== undefined && concurrentHours !== null ? Number(concurrentHours) : 120,
       },
       select: {
         id: true,
         email: true,
         fullName: true,
         zaloId: true,
+        staffCode: true,
+        positionId: true,
+        position: { select: { id: true, code: true, name: true, careerRank: true } },
+        qualification: true,
+        department: true,
+        workLocation: true,
+        concurrentHours: true,
         role: true,
         status: true,
         createdAt: true,

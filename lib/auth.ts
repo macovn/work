@@ -3,13 +3,14 @@ import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 import { prisma } from "./prisma";
 import { getJwtSecretString } from "./jwt-secret";
+import { Role } from "@prisma/client";
 
 const TOKEN_COOKIE_NAME = "auth_token";
 
 export interface JWTPayload {
   userId: string;
   email: string;
-  role: "ADMIN" | "USER";
+  role: Role;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -70,7 +71,13 @@ export async function getCurrentUser() {
         email: true,
         fullName: true,
         role: true,
+        department: true,
+        workLocation: true,
         status: true,
+        positionId: true,
+        position: {
+          select: { id: true, name: true, code: true, careerRank: true },
+        },
       },
     });
 

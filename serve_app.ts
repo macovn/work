@@ -51,8 +51,8 @@ async function start() {
     console.log("PostgreSQL server already running or started.");
   }
 
-  // 2. Đồng bộ DB & Seed
-  console.log("2. Đồng bộ Schema & Kiểm tra dữ liệu...");
+  // 2. Đồng bộ DB (Giữ nguyên toàn bộ dữ liệu phân quyền & công việc)
+  console.log("2. Đồng bộ Schema...");
   try {
     execSync("npx prisma db push --skip-generate --accept-data-loss", {
       env: { ...process.env, DATABASE_URL: DB_URL },
@@ -60,15 +60,32 @@ async function start() {
       cwd: process.cwd(),
       shell: true,
     });
-    execSync("npx tsx prisma/seed.ts", {
-      env: { ...process.env, DATABASE_URL: DB_URL },
-      stdio: "inherit",
-      cwd: process.cwd(),
-      shell: true,
-    });
-    console.log("✓ Dữ liệu mẫu (1 Admin, 3 Users, 100 Demo Tasks) đã sẵn sàng!");
   } catch (err: any) {
-    console.error("Lỗi đồng bộ DB:", err.message);
+    console.error("Lỗi đồng bộ DB Schema:", err.message);
+  }
+
+  // Tuyệt đối KHÔNG tự động chạy seed.ts khi hệ thống đã có dữ liệu
+  // Chỉ khởi tạo seed lần đầu tiên khi cơ sở dữ liệu hoàn toàn trống
+  try {
+    const { PrismaClient } = await import("@prisma/client");
+    const checkPrisma = new PrismaClient();
+    const userCount = await checkPrisma.user.count();
+    await checkPrisma.$disconnect();
+
+    if (userCount === 0) {
+      console.log("Cơ sở dữ liệu mới (chưa có người dùng), tiến hành khởi tạo dữ liệu mẫu lần đầu...");
+      execSync("npx tsx prisma/seed.ts", {
+        env: { ...process.env, DATABASE_URL: DB_URL },
+        stdio: "inherit",
+        cwd: process.cwd(),
+        shell: true,
+      });
+      console.log("✓ Khởi tạo dữ liệu ban đầu thành công!");
+    } else {
+      console.log(`✓ Đã có ${userCount} người dùng trong DB. Giữ nguyên 100% dữ liệu phân quyền và công việc, KHÔNG reset!`);
+    }
+  } catch (err: any) {
+    console.error("Lỗi kiểm tra dữ liệu:", err.message);
   }
 
   // Update .env DATABASE_URL

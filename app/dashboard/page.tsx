@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { formatDate, formatPriority, formatStatus } from "@/lib/utils";
 import { calculateEvaluation, EvaluationResult } from "@/lib/evaluation";
+import { isExecutive } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -34,7 +35,21 @@ export default async function DashboardPage() {
   const in3Days = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
 
   // Where clause based on RBAC
-  const baseWhere = user.role === "ADMIN" ? {} : { assigneeId: user.id };
+  const isExec = isExecutive(user.role);
+  const isDept = user.role === "DEPARTMENT_HEAD";
+  const baseWhere: any = isExec
+    ? {}
+    : isDept
+    ? (user.department
+        ? {
+            OR: [
+              { department: user.department },
+              { assignee: { department: user.department } },
+              { assigneeId: user.id },
+            ],
+          }
+        : { assigneeId: user.id })
+    : { assigneeId: user.id };
 
   let totalTasks = 0;
   let overdueTasks = 0;
@@ -154,7 +169,7 @@ export default async function DashboardPage() {
 
   let evalTasks: any[] = [];
   try {
-    evalTasks = await prisma.task.findMany({
+    const rawEvalTasks = await prisma.task.findMany({
       where: baseWhere,
       select: {
         id: true,
@@ -164,8 +179,13 @@ export default async function DashboardPage() {
         completedScore: true,
         kpiScore: true,
         status: true,
+        group: { select: { weight: true } },
       },
     });
+    evalTasks = rawEvalTasks.map((t) => ({
+      ...t,
+      groupWeight: t.group?.weight ?? null,
+    }));
   } catch (e) {
     console.error("[Dashboard evalTasks fetch error]:", e);
   }
@@ -231,7 +251,7 @@ export default async function DashboardPage() {
       <div>
         <h1 className="text-2xl font-black text-gray-900 tracking-tight">Dashboard Chỉ Số KPI</h1>
         <p className="text-sm text-gray-500">
-          Tổng quan tình hình thực hiện công việc {user?.role !== "ADMIN" && "(Việc được giao cho bạn)"}
+          Tổng quan tình hình thực hiện công việc {isExec ? "(Toàn đơn vị)" : isDept ? `(Bộ phận: ${user?.workLocation || "Trạm chính"})` : "(Việc được giao cho bạn)"}
         </p>
       </div>
 
@@ -245,7 +265,11 @@ export default async function DashboardPage() {
             <div>
               <h2 className="font-bold text-gray-900 text-base">Đánh Giá & Xếp Loại Kết Quả</h2>
               <p className="text-xs text-gray-500">
-                {user?.role === "ADMIN" ? "Tổng hợp toàn đơn vị theo công thức chuẩn" : "Kết quả đánh giá cá nhân của bạn"}
+                {isExec
+                  ? "Tổng hợp toàn đơn vị theo công thức chuẩn"
+                  : isDept
+                  ? `Kết quả đánh giá bộ phận ${user?.workLocation || "Trạm chính"}`
+                  : "Kết quả đánh giá cá nhân của bạn"}
               </p>
             </div>
           </div>

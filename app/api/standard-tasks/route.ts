@@ -27,17 +27,18 @@ export async function GET(request: Request) {
       where.OR = [
         { name: { contains: search, mode: "insensitive" } },
         { code: { contains: search, mode: "insensitive" } },
+        { missionCodeA1: { contains: search, mode: "insensitive" } },
       ];
     }
 
     const standardTasks = await prisma.standardTask.findMany({
       where,
       include: {
-        position: { select: { id: true, name: true, code: true } },
+        position: { select: { id: true, name: true, code: true, careerRank: true } },
         group: { select: { id: true, name: true, code: true, weight: true } },
       },
       orderBy: [
-        { position: { name: "asc" } },
+        { position: { order: "asc" } },
         { group: { order: "asc" } },
         { order: "asc" },
         { code: "asc" },
@@ -68,11 +69,17 @@ export async function POST(request: Request) {
       benchmarkScore,
       complexityLevel,
       conversionFactor,
+      missionCodeA1,
+      productCode,
+      annualVolume,
+      standardMinutes,
+      extraHoursYear,
+      digitalSavedHours,
+      evidenceSource,
       isActive,
       order,
     } = body;
 
-    // Validation: Không cho tạo công việc chuẩn thiếu ĐVT, Điểm chuẩn, Mức N, Hệ số
     if (!positionId || !groupId || !code || !name || !unit || benchmarkScore === undefined || !complexityLevel) {
       return NextResponse.json(
         { error: "Vui lòng nhập đầy đủ: Vị trí, Nhóm, Mã, Tên công việc, ĐVT, Điểm chuẩn và Mức độ N1-N5" },
@@ -103,6 +110,13 @@ export async function POST(request: Request) {
         benchmarkScore: Number(benchmarkScore),
         complexityLevel: cleanLevel,
         conversionFactor: finalFactor,
+        missionCodeA1: missionCodeA1 ? String(missionCodeA1).trim() : null,
+        productCode: productCode ? String(productCode).trim() : null,
+        annualVolume: annualVolume !== undefined && annualVolume !== null ? Number(annualVolume) : null,
+        standardMinutes: standardMinutes !== undefined && standardMinutes !== null ? Number(standardMinutes) : null,
+        extraHoursYear: extraHoursYear !== undefined && extraHoursYear !== null ? Number(extraHoursYear) : 0,
+        digitalSavedHours: digitalSavedHours !== undefined && digitalSavedHours !== null ? Number(digitalSavedHours) : 0,
+        evidenceSource: evidenceSource ? String(evidenceSource).trim() : null,
         isActive: isActive !== false,
         order: typeof order === "number" ? order : 0,
       },
@@ -127,7 +141,23 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json();
-    const { id, name, unit, benchmarkScore, complexityLevel, conversionFactor, isActive, order } = body;
+    const {
+      id,
+      name,
+      unit,
+      benchmarkScore,
+      complexityLevel,
+      conversionFactor,
+      missionCodeA1,
+      productCode,
+      annualVolume,
+      standardMinutes,
+      extraHoursYear,
+      digitalSavedHours,
+      evidenceSource,
+      isActive,
+      order,
+    } = body;
 
     if (!id) {
       return NextResponse.json({ error: "ID công việc chuẩn là bắt buộc" }, { status: 400 });
@@ -146,6 +176,13 @@ export async function PUT(request: Request) {
     } else if (conversionFactor !== undefined) {
       updateData.conversionFactor = Number(conversionFactor);
     }
+    if (missionCodeA1 !== undefined) updateData.missionCodeA1 = missionCodeA1 ? String(missionCodeA1).trim() : null;
+    if (productCode !== undefined) updateData.productCode = productCode ? String(productCode).trim() : null;
+    if (annualVolume !== undefined) updateData.annualVolume = annualVolume !== null ? Number(annualVolume) : null;
+    if (standardMinutes !== undefined) updateData.standardMinutes = standardMinutes !== null ? Number(standardMinutes) : null;
+    if (extraHoursYear !== undefined) updateData.extraHoursYear = extraHoursYear !== null ? Number(extraHoursYear) : 0;
+    if (digitalSavedHours !== undefined) updateData.digitalSavedHours = digitalSavedHours !== null ? Number(digitalSavedHours) : 0;
+    if (evidenceSource !== undefined) updateData.evidenceSource = evidenceSource ? String(evidenceSource).trim() : null;
     if (typeof isActive === "boolean") updateData.isActive = isActive;
     if (typeof order === "number") updateData.order = order;
 

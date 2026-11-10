@@ -5,8 +5,20 @@ import { createGoogleCalendarEvent } from "@/lib/google-calendar";
 import { NotificationEngine } from "@/lib/notification-engine";
 import { calculateTaskScores, getConversionFactorByComplexity } from "@/lib/standard-task";
 import { fromLocalInputValue } from "@/lib/utils";
+import { isExecutive, isManager } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
+
+function extractRankNumber(...sources: (string | null | undefined)[]): number | null {
+  for (const src of sources) {
+    if (!src) continue;
+    const mCode = src.match(/\.B([1-5])\b/i) || src.match(/\bB([1-5])\b/);
+    if (mCode) return Number(mCode[1]);
+    const mText = src.match(/Bậc\s*([1-5])/i);
+    if (mText) return Number(mText[1]);
+  }
+  return null;
+}
 
 export async function GET(request: Request) {
   try {
@@ -18,6 +30,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     const assigneeId = searchParams.get("assigneeId");
+    const department = searchParams.get("department");
     const field = searchParams.get("field");
     const status = searchParams.get("status");
     const priority = searchParams.get("priority");
@@ -25,6 +38,7 @@ export async function GET(request: Request) {
     const positionId = searchParams.get("positionId");
     const groupId = searchParams.get("groupId");
     const standardTaskId = searchParams.get("standardTaskId");
+    const approvalStatus = searchParams.get("approvalStatus");
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
     const search = searchParams.get("search");
@@ -33,55 +47,95 @@ export async function GET(request: Request) {
     const limit = Math.min(parseInt(searchParams.get("limit") || "10", 10), 100);
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const andFilters: any[] = [];
 
     if (id) {
-      where.id = id;
+      andFilters.push({ id });
     }
 
-    if (user.role !== "ADMIN") {
-      where.assigneeId = user.id;
-    } else if (assigneeId) {
-      where.assigneeId = assigneeId;
+    if (isExecutive(user.role)) {
+      if (assigneeId) andFilters.push({ assigneeId });
+      if (department) {
+        andFilters.push({
+          OR: [{ department }, { assignee: { department } }],
+        });
+      }
+    } else if (user.role === "DEPARTMENT_HEAD") {
+      // Phụ trách bộ phận: CHỈ xem công việc & KPI thuộc bộ phận mình phụ trách (hoặc việc do mình làm)
+      const myDept = user.department;
+      if (myDept) {
+        andFilters.push({
+          OR: [
+            { department: myDept },
+            { assignee: { department: myDept } },
+            { assigneeId: user.id },
+          ],
+        });
+      } else {
+        andFilters.push({ assigneeId: user.id });
+      }
+
+      if (assigneeId) {
+        andFilters.push({ assigneeId });
+      }
+    } else {
+      // Viên chức: chỉ xem công việc của chính mình
+      andFilters.push({ assigneeId: user.id });
     }
 
-    if (field) where.field = field;
-    if (status) where.status = status;
-    if (priority) where.priority = priority;
-    if (taskType) where.taskType = taskType;
-    if (positionId) where.positionId = positionId;
-    if (groupId) where.groupId = groupId;
-    if (standardTaskId) where.standardTaskId = standardTaskId;
+    if (field) andFilters.push({ field });
+    if (status) andFilters.push({ status });
+    if (priority) andFilters.push({ priority });
+    if (taskType) andFilters.push({ taskType });
+    if (positionId) andFilters.push({ positionId });
+    if (groupId) andFilters.push({ groupId });
+    if (standardTaskId) andFilters.push({ standardTaskId });
+    if (approvalStatus) andFilters.push({ approvalStatus });
 
     if (startDate || endDate) {
-      where.deadline = {};
-      // Naive "YYYY-MM-DD"/"YYYY-MM-DDTHH:mm" từ client được hiểu theo giờ Việt Nam (audit H7)
+      const deadlineCond: any = {};
       if (startDate) {
         const s = fromLocalInputValue(startDate);
-        if (s) where.deadline.gte = s;
+        if (s) deadlineCond.gte = s;
       }
       if (endDate) {
         const e = fromLocalInputValue(endDate);
-        if (e) where.deadline.lte = e;
+        if (e) deadlineCond.lte = e;
       }
+      andFilters.push({ deadline: deadlineCond });
     }
 
     if (search) {
-      where.OR = [
-        { code: { contains: search, mode: "insensitive" } },
-        { title: { contains: search, mode: "insensitive" } },
-        { field: { contains: search, mode: "insensitive" } },
-      ];
+      andFilters.push({
+        OR: [
+          { code: { contains: search, mode: "insensitive" } },
+          { title: { contains: search, mode: "insensitive" } },
+          { field: { contains: search, mode: "insensitive" } },
+          { assignee: { fullName: { contains: search, mode: "insensitive" } } },
+          { assignee: { staffCode: { contains: search, mode: "insensitive" } } },
+        ],
+      });
     }
+
+    const where = andFilters.length > 0 ? { AND: andFilters } : {};
 
     const [tasks, total] = await Promise.all([
       prisma.task.findMany({
         where,
         include: {
           assignee: {
+            select: { id: true, fullName: true, email: true, department: true, positionId: true, workLocation: true, staffCode: true },
+          },
+          approver: {
+            select: { id: true, fullName: true, email: true },
+          },
+          creator: {
             select: { id: true, fullName: true, email: true },
           },
           kpiEvaluator: {
+            select: { id: true, fullName: true, email: true },
+          },
+          directorAdjuster: {
             select: { id: true, fullName: true, email: true },
           },
           position: {
@@ -131,9 +185,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Chỉ Admin mới có quyền tạo công việc" }, { status: 403 });
-    }
+    const userIsManager = isManager(user.role);
 
     const body = await request.json();
     const {
@@ -147,6 +199,9 @@ export async function POST(request: Request) {
       status,
       result,
       notes,
+      evidenceSource,
+      evidenceFiles,
+      taskSource,
       positionId,
       groupId,
       standardTaskId,
@@ -158,9 +213,56 @@ export async function POST(request: Request) {
       completedVolume,
     } = body;
 
-    if (!code || !title || !field || !assigneeId || !deadline) {
-      return NextResponse.json({ error: "Thiếu các thông tin bắt buộc" }, { status: 400 });
+    // Xác định người thực hiện & quyền hạn:
+    // - Viên chức thường: tự tạo việc đột xuất cho chính mình, trạng thái bắt buộc PENDING chờ duyệt
+    // - Quản lý: giao việc cho nhân sự (hoặc chính mình), mặc định APPROVED
+    let finalAssigneeId = assigneeId;
+    let finalTaskType = taskType || "RECURRING";
+    let finalApprovalStatus: "PENDING" | "APPROVED" = "APPROVED";
+    let finalApproverId: string | null = user.id;
+    let finalApprovedAt: Date | null = new Date();
+    let finalStatus = status || "TODO";
+    let finalTaskSource = taskSource ? String(taskSource).trim() : null;
+
+    if (!userIsManager) {
+      // Viên chức tự tạo nhiệm vụ đột xuất (từ Chính quyền điện tử, cấp trên giao trực tiếp...)
+      finalAssigneeId = user.id;
+      finalTaskType = "AD_HOC";
+      finalApprovalStatus = "PENDING";
+      finalApproverId = null;
+      finalApprovedAt = null;
+      finalStatus = "TODO"; // Không được phép bắt đầu triển khai khi chưa duyệt
+      if (!finalTaskSource) {
+        finalTaskSource = "Chính quyền điện tử / Cấp trên giao trực tiếp";
+      }
+    } else {
+      // Phụ trách bộ phận chỉ được giao việc cho nhân sự cùng bộ phận hoặc chính mình
+      if (user.role === "DEPARTMENT_HEAD" && finalAssigneeId && finalAssigneeId !== user.id) {
+        const targetUser = await prisma.user.findUnique({
+          where: { id: finalAssigneeId },
+          select: { department: true },
+        });
+        const sameDept =
+          user.department &&
+          targetUser?.department &&
+          user.department.trim().toLowerCase() === targetUser.department.trim().toLowerCase();
+        if (!sameDept) {
+          return NextResponse.json(
+            {
+              error: `Phụ trách bộ phận (${user.department}) chỉ được giao việc cho nhân sự thuộc bộ phận mình`,
+            },
+            { status: 403 }
+          );
+        }
+      }
     }
+
+    if (!title || !field || !finalAssigneeId || !deadline) {
+      return NextResponse.json({ error: "Thiếu các thông tin bắt buộc (Tiêu đề, Lĩnh vực, Deadline)" }, { status: 400 });
+    }
+
+    // Tự động sinh mã công việc nếu không nhập
+    const finalCode = code?.trim() || (finalTaskType === "AD_HOC" ? `DX-${Date.now().toString().slice(-6)}` : `CV-${Date.now().toString().slice(-6)}`);
 
     // Deadline naive được hiểu theo giờ Việt Nam (audit H7) — không phụ thuộc TZ server.
     const parsedDeadline = fromLocalInputValue(deadline);
@@ -169,10 +271,10 @@ export async function POST(request: Request) {
     }
 
     const existingCode = await prisma.task.findUnique({
-      where: { code: code.trim() },
+      where: { code: finalCode },
     });
     if (existingCode) {
-      return NextResponse.json({ error: `Mã công việc "${code}" đã tồn tại` }, { status: 400 });
+      return NextResponse.json({ error: `Mã công việc "${finalCode}" đã tồn tại` }, { status: 400 });
     }
 
     let snapPositionId = positionId || null;
@@ -182,6 +284,7 @@ export async function POST(request: Request) {
     let snapBenchmarkScore = typeof benchmarkScore === "number" ? benchmarkScore : null;
     let snapComplexityLevel = complexityLevel || null;
     let snapConversionFactor = typeof conversionFactor === "number" ? conversionFactor : null;
+    let snapEvidenceSource = evidenceSource ? String(evidenceSource).trim() : null;
 
     if (standardTaskId) {
       const stdTask = await prisma.standardTask.findUnique({
@@ -195,9 +298,40 @@ export async function POST(request: Request) {
         snapBenchmarkScore = stdTask.benchmarkScore;
         snapComplexityLevel = stdTask.complexityLevel;
         snapConversionFactor = stdTask.conversionFactor;
+        if (!snapEvidenceSource && stdTask.evidenceSource) {
+          snapEvidenceSource = stdTask.evidenceSource;
+        }
       }
     } else if (snapComplexityLevel && !snapConversionFactor) {
       snapConversionFactor = getConversionFactorByComplexity(snapComplexityLevel);
+    }
+
+    // Kiểm tra Bậc VTVL của Người thực hiện phải >= Bậc của Vị trí việc làm / Lĩnh vực giao
+    const [targetPos, assigneeUser] = await Promise.all([
+      snapPositionId ? prisma.jobPosition.findUnique({ where: { id: snapPositionId } }) : Promise.resolve(null),
+      prisma.user.findUnique({
+        where: { id: finalAssigneeId },
+        include: { position: true },
+      }),
+    ]);
+
+    const requiredRank = extractRankNumber(targetPos?.code, targetPos?.name, targetPos?.careerRank, field);
+    if (requiredRank !== null) {
+      const userRank = extractRankNumber(
+        assigneeUser?.position?.code,
+        assigneeUser?.position?.name,
+        assigneeUser?.position?.careerRank
+      );
+      if (userRank === null || userRank < requiredRank) {
+        return NextResponse.json(
+          {
+            error: `Lĩnh vực/VTVL yêu cầu từ Bậc ${requiredRank} (B${requiredRank}–B5) trở lên. Viên chức "${
+              assigneeUser?.fullName || ""
+            }" hiện đang ở ${assigneeUser?.position?.code || "chưa đủ bậc"} (Bậc ${userRank ?? "chưa xếp"}).`,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const parsedAssignedVol = typeof assignedVolume === "number" ? assignedVolume : (assignedVolume ? Number(assignedVolume) : null);
@@ -222,16 +356,24 @@ export async function POST(request: Request) {
 
     const newTask = await prisma.task.create({
       data: {
-        code: code.trim(),
+        code: finalCode,
         title: title.trim(),
         field: field.trim(),
-        assigneeId,
+        assigneeId: finalAssigneeId,
+        department: body.department || assigneeUser?.department || "Khám bệnh",
         deadline: parsedDeadline,
         priority: priority || "LOW",
-        taskType: taskType || "RECURRING",
-        status: status || "TODO",
+        taskType: finalTaskType,
+        status: finalStatus,
+        taskSource: finalTaskSource,
+        approvalStatus: finalApprovalStatus,
+        approverId: finalApproverId,
+        approvedAt: finalApprovedAt,
+        createdById: user.id,
         result: result || null,
         notes: notes || null,
+        evidenceSource: snapEvidenceSource,
+        evidenceFiles: evidenceFiles ? (typeof evidenceFiles === "string" ? evidenceFiles : JSON.stringify(evidenceFiles)) : null,
         positionId: snapPositionId,
         groupId: snapGroupId,
         standardTaskId: snapStandardTaskId,
@@ -247,6 +389,12 @@ export async function POST(request: Request) {
       },
       include: {
         assignee: {
+          select: { id: true, fullName: true, email: true, department: true, workLocation: true },
+        },
+        approver: {
+          select: { id: true, fullName: true, email: true },
+        },
+        creator: {
           select: { id: true, fullName: true, email: true },
         },
         position: {
@@ -261,28 +409,59 @@ export async function POST(request: Request) {
       },
     });
 
-    // Audit M11/H8: tạo Google Calendar event SAU khi ghi DB — nếu event lỗi, task vẫn tồn tại
-    // (không còn event mồ côi khi DB insert thất bại). Lỗi sync chỉ ảnh hưởng calendar.
-    if (settings.googleCalendarEnabled) {
-      const eventId = await createGoogleCalendarEvent({
-        id: "",
-        code: code.trim(),
-        title: title.trim(),
-        deadline: parsedDeadline,
-        field: field.trim(),
-        priority: priority || "LOW",
-        taskType: taskType || "RECURRING",
-        status: status || "TODO",
-        notes: notes || undefined,
-      });
-      if (eventId) {
-        newTask.googleEventId = eventId;
-        await prisma.task.update({ where: { id: newTask.id }, data: { googleEventId: eventId } });
+    // Nếu là nhiệm vụ đột xuất viên chức tự tạo (chờ duyệt): gửi thông báo cho Cán bộ phụ trách bộ phận
+    if (finalApprovalStatus === "PENDING") {
+      try {
+        const headWhere: any[] = [{ role: { in: ["ADMIN", "DIRECTOR"] } }];
+        if (assigneeUser?.department) {
+          headWhere.push({ role: "DEPARTMENT_HEAD", department: assigneeUser.department });
+        }
+        const recipients = await prisma.user.findMany({
+          where: {
+            OR: headWhere,
+            status: "ACTIVE",
+            id: { not: user.id },
+          },
+          select: { id: true },
+        });
+        if (recipients.length > 0) {
+          await prisma.inAppNotification.createMany({
+            data: recipients.map((r) => ({
+              userId: r.id,
+              taskId: newTask.id,
+              title: "Nhiệm vụ đột xuất mới chờ phê duyệt",
+              message: `Viên chức ${user.fullName} vừa đề xuất việc đột xuất "${newTask.title}" (Nguồn: ${finalTaskSource || "Đột xuất"}). Vui lòng phê duyệt để viên chức triển khai.`,
+            })),
+          });
+        }
+      } catch (e) {
+        console.error("[Notification to Head Error]:", e);
       }
     }
 
-    // Audit M1: chỉ đánh giá riêng task vừa tạo (thay vì quét toàn bộ bảng).
-    NotificationEngine.evaluateTaskNow(newTask.id);
+    // Audit M11/H8: chỉ đồng bộ calendar và notification khi việc đã được duyệt
+    if (finalApprovalStatus === "APPROVED") {
+      if (settings.googleCalendarEnabled) {
+        const eventId = await createGoogleCalendarEvent({
+          id: "",
+          code: finalCode,
+          title: title.trim(),
+          deadline: parsedDeadline,
+          field: field.trim(),
+          priority: priority || "LOW",
+          taskType: finalTaskType,
+          status: finalStatus,
+          notes: notes || undefined,
+        });
+        if (eventId) {
+          newTask.googleEventId = eventId;
+          await prisma.task.update({ where: { id: newTask.id }, data: { googleEventId: eventId } });
+        }
+      }
+
+      // Audit M1: chỉ đánh giá riêng task vừa tạo (thay vì quét toàn bộ bảng).
+      NotificationEngine.evaluateTaskNow(newTask.id);
+    }
 
     return NextResponse.json(newTask, { status: 201 });
   } catch (error: any) {

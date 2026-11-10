@@ -1,96 +1,136 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { PILOT_DAN_SO_POSITION, calculateTaskScores } from "../lib/standard-task";
+import { calculateTaskScores } from "../lib/standard-task";
+import { TYT_VTVL_POSITIONS, TYT_STAFF_D1, inferDepartmentFromStaff } from "../lib/tyt-caibau-data";
 
 const prisma = new PrismaClient();
 
 export async function seedStandardTaskCatalog() {
-  console.log("Seeding Standard Task Catalog (Pilot Dân số)...");
+  console.log("Seeding VTVL & Standard Task Catalog (19 VTVL Bậc nghề nghiệp TYT Cái Bầu & QĐ 1399/QĐ-SYT)...");
 
-  // 1. Upsert Position
-  const pos = await prisma.jobPosition.upsert({
-    where: { code: PILOT_DAN_SO_POSITION.code },
-    update: {
-      name: PILOT_DAN_SO_POSITION.name,
-      description: PILOT_DAN_SO_POSITION.description,
-      isActive: true,
-    },
-    create: {
-      code: PILOT_DAN_SO_POSITION.code,
-      name: PILOT_DAN_SO_POSITION.name,
-      description: PILOT_DAN_SO_POSITION.description,
-      isActive: true,
-      order: 1,
-    },
-  });
-
-  // 2. Upsert Groups & Standard Tasks
-  let groupOrder = 1;
+  const positionMap = new Map<string, string>();
+  let posOrder = 1;
   let taskOrder = 1;
 
-  for (const groupData of PILOT_DAN_SO_POSITION.groups) {
-    const group = await prisma.jobTaskGroup.upsert({
-      where: {
-        positionId_code: {
-          positionId: pos.id,
-          code: groupData.code,
-        },
-      },
+  for (const posData of TYT_VTVL_POSITIONS) {
+    const pos = await prisma.jobPosition.upsert({
+      where: { code: posData.code },
       update: {
-        name: groupData.name,
-        weight: groupData.weight,
+        name: posData.name,
+        description: posData.description,
+        careerRank: posData.careerRank,
+        targetRatio: posData.targetRatio,
+        approvedQuota: posData.approvedQuota,
+        currentHeadcount: posData.currentHeadcount,
+        standardHoursYear: posData.standardHoursYear,
+        method: posData.method,
         isActive: true,
+        order: posOrder++,
       },
       create: {
-        positionId: pos.id,
-        code: groupData.code,
-        name: groupData.name,
-        weight: groupData.weight,
+        code: posData.code,
+        name: posData.name,
+        description: posData.description,
+        careerRank: posData.careerRank,
+        targetRatio: posData.targetRatio,
+        approvedQuota: posData.approvedQuota,
+        currentHeadcount: posData.currentHeadcount,
+        standardHoursYear: posData.standardHoursYear,
+        method: posData.method,
         isActive: true,
-        order: groupOrder++,
+        order: posOrder++,
       },
     });
 
-    for (const taskData of groupData.tasks) {
-      await prisma.standardTask.upsert({
-        where: { code: taskData.code },
+    positionMap.set(posData.code, pos.id);
+
+    let groupOrder = 1;
+    for (const groupData of posData.groups) {
+      const group = await prisma.jobTaskGroup.upsert({
+        where: {
+          positionId_code: {
+            positionId: pos.id,
+            code: groupData.code,
+          },
+        },
         update: {
-          positionId: pos.id,
-          groupId: group.id,
-          name: taskData.name,
-          unit: taskData.unit,
-          benchmarkScore: taskData.benchmarkScore,
-          complexityLevel: taskData.complexityLevel,
-          conversionFactor: taskData.conversionFactor,
+          name: groupData.name,
+          weight: groupData.weight,
           isActive: true,
+          order: groupOrder++,
         },
         create: {
           positionId: pos.id,
-          groupId: group.id,
-          code: taskData.code,
-          name: taskData.name,
-          unit: taskData.unit,
-          benchmarkScore: taskData.benchmarkScore,
-          complexityLevel: taskData.complexityLevel,
-          conversionFactor: taskData.conversionFactor,
+          code: groupData.code,
+          name: groupData.name,
+          weight: groupData.weight,
           isActive: true,
-          order: taskOrder++,
+          order: groupOrder++,
         },
       });
+
+      for (const taskData of groupData.tasks) {
+        await prisma.standardTask.upsert({
+          where: { code: taskData.code },
+          update: {
+            positionId: pos.id,
+            groupId: group.id,
+            name: taskData.name,
+            unit: taskData.unit,
+            benchmarkScore: taskData.benchmarkScore,
+            complexityLevel: taskData.complexityLevel,
+            conversionFactor: taskData.conversionFactor,
+            missionCodeA1: taskData.missionCodeA1 ?? null,
+            productCode: taskData.productCode ?? null,
+            annualVolume: taskData.annualVolume ?? null,
+            standardMinutes: taskData.standardMinutes ?? null,
+            extraHoursYear: taskData.extraHoursYear ?? 0,
+            digitalSavedHours: taskData.digitalSavedHours ?? 0,
+            evidenceSource: taskData.evidenceSource ?? null,
+            isActive: true,
+            order: taskOrder++,
+          },
+          create: {
+            positionId: pos.id,
+            groupId: group.id,
+            code: taskData.code,
+            name: taskData.name,
+            unit: taskData.unit,
+            benchmarkScore: taskData.benchmarkScore,
+            complexityLevel: taskData.complexityLevel,
+            conversionFactor: taskData.conversionFactor,
+            missionCodeA1: taskData.missionCodeA1 ?? null,
+            productCode: taskData.productCode ?? null,
+            annualVolume: taskData.annualVolume ?? null,
+            standardMinutes: taskData.standardMinutes ?? null,
+            extraHoursYear: taskData.extraHoursYear ?? 0,
+            digitalSavedHours: taskData.digitalSavedHours ?? 0,
+            evidenceSource: taskData.evidenceSource ?? null,
+            isActive: true,
+            order: taskOrder++,
+          },
+        });
+      }
     }
   }
 
-  console.log("Seeded 14 Standard Tasks for Pilot Dân số successfully.");
-  return pos;
+  // Deactivate legacy VT-DAN-SO if present so it doesn't duplicate VTVL.232.10.B3 / B2
+  await prisma.jobPosition.updateMany({
+    where: { code: "VT-DAN-SO" },
+    data: { isActive: false },
+  });
+
+  console.log(`Seeded ${TYT_VTVL_POSITIONS.length} VTVL positions of Trạm Y tế Cái Bầu successfully.`);
+  return positionMap;
 }
 
 export async function runSeed() {
-  console.log("Starting seed process...");
+  console.log("Starting seed process for Trạm Y tế Cái Bầu (HD 07-BTCTW & QĐ 1399/QĐ-SYT)...");
 
-  // 1. Seed Standard Task Catalog
-  const position = await seedStandardTaskCatalog();
+  // 1. Seed 19 VTVL Positions & Standard Task Catalog
+  const positionMap = await seedStandardTaskCatalog();
 
-  // 2. Create or reset default settings
+  // 2. Default Notification Settings
   await prisma.notificationSetting.upsert({
     where: { id: "default" },
     update: {},
@@ -106,303 +146,384 @@ export async function runSeed() {
     },
   });
 
-  // 3. Passwords & Users
+  // 3. Seed all 67 Staff Members of Trạm Y tế Cái Bầu (Biểu D1)
   const adminPassword = await bcrypt.hash("admin123", 10);
   const userPassword = await bcrypt.hash("user123", 10);
 
-  const admin = await prisma.user.upsert({
-    where: { email: "admin@example.com" },
-    update: { role: "ADMIN" },
-    create: {
-      email: "admin@example.com",
-      passwordHash: adminPassword,
-      fullName: "Nguyễn Văn Admin",
-      role: "ADMIN",
-      status: "ACTIVE",
-    },
+  const userByStaffCode = new Map<string, { id: string; fullName: string; email: string }>();
+
+  for (const staff of TYT_STAFF_D1) {
+    const posId = positionMap.get(staff.vtvlCode) || null;
+    const isAdminAccount = staff.email === "admin@example.com";
+    const passwordHash = isAdminAccount ? adminPassword : userPassword;
+    const qualificationStr = `${staff.qualification} (${staff.currentRankCode})`;
+    const dept = staff.department || inferDepartmentFromStaff(staff);
+
+    const existing = await prisma.user.findUnique({
+      where: { email: staff.email },
+      select: { role: true, department: true },
+    });
+
+    const u = await prisma.user.upsert({
+      where: { email: staff.email },
+      update: {
+        passwordHash,
+        fullName: staff.fullName,
+        staffCode: staff.staffCode,
+        positionId: posId,
+        qualification: qualificationStr,
+        // Bảo vệ toàn vẹn phân cấp phân quyền và bộ phận đã thiết lập
+        department: existing?.department || dept,
+        workLocation: staff.workLocation,
+        concurrentHours: staff.concurrentHours,
+        role: existing?.role || staff.role,
+        status: "ACTIVE",
+      },
+      create: {
+        email: staff.email,
+        passwordHash,
+        fullName: staff.fullName,
+        staffCode: staff.staffCode,
+        positionId: posId,
+        qualification: qualificationStr,
+        department: dept,
+        workLocation: staff.workLocation,
+        concurrentHours: staff.concurrentHours,
+        role: staff.role,
+        status: "ACTIVE",
+      },
+    });
+
+    userByStaffCode.set(staff.staffCode, u);
+  }
+
+  console.log(`Đã đồng bộ thông tin chức danh cho ${userByStaffCode.size} viên chức (bảo toàn phân quyền).`);
+
+  // 4. Nếu đã có dữ liệu công việc trong DB thì giữ nguyên 100%, không xóa/reset
+  const existingTaskCount = await prisma.task.count();
+  if (existingTaskCount > 0) {
+    console.log(`✓ Đã có ${existingTaskCount} công việc trong hệ thống, giữ nguyên toàn bộ dữ liệu thực tế.`);
+    return;
+  }
+
+  const allStandardTasks = await prisma.standardTask.findMany({
+    where: { isActive: true },
   });
-
-  const user1 = await prisma.user.upsert({
-    where: { email: "user1@example.com" },
-    update: {},
-    create: {
-      email: "user1@example.com",
-      passwordHash: userPassword,
-      fullName: "Trần Văn Nhân Viên 1",
-      role: "USER",
-      status: "ACTIVE",
-    },
-  });
-
-  const user2 = await prisma.user.upsert({
-    where: { email: "user2@example.com" },
-    update: {},
-    create: {
-      email: "user2@example.com",
-      passwordHash: userPassword,
-      fullName: "Lê Thị Nhân Viên 2",
-      role: "USER",
-      status: "ACTIVE",
-    },
-  });
-
-  const user3 = await prisma.user.upsert({
-    where: { email: "user3@example.com" },
-    update: {},
-    create: {
-      email: "user3@example.com",
-      passwordHash: userPassword,
-      fullName: "Phạm Hoàng Nhân Viên 3",
-      role: "USER",
-      status: "ACTIVE",
-    },
-  });
-
-  // 4. XÓA TOÀN BỘ CÔNG VIỆC MẪU CŨ
-  console.log("Xóa toàn bộ công việc cũ để nạp mới 14 công việc mẫu chuẩn Dân số...");
-  await prisma.task.deleteMany({});
-
-  // 5. Query 14 Standard Tasks from DB
-  const standardTasks = await prisma.standardTask.findMany({
-    where: { positionId: position.id },
-    orderBy: { code: "asc" },
-  });
-
-  const stdMap = new Map(standardTasks.map((t) => [t.code, t]));
+  const stdMap = new Map(allStandardTasks.map((t) => [t.code, t]));
 
   const now = new Date();
   const addHours = (h: number) => new Date(now.getTime() + h * 60 * 60 * 1000);
   const subHours = (h: number) => new Date(now.getTime() - h * 60 * 60 * 1000);
 
-  // 6. Định nghĩa 14 Công việc mẫu thực tế tương ứng chính xác 14 Công việc/Sản phẩm chuẩn
-  const pilotTasksDefinition = [
-    // --- NHÓM 1: Thu thập và quản trị dữ liệu dân số (25%) ---
+  const adminUser = userByStaffCode.get("VC-10.2669")!; // Phạm Huy Cường - Giám đốc
+  const pgdNguyen = userByStaffCode.get("VC-10.2670")!; // Trương Thái Nguyên - PGĐ (user1)
+  const bsTuanAnh = userByStaffCode.get("VC-10.3703")!; // BS CKI Nguyễn Tuấn Anh (user2)
+  const ddMinhHuong = userByStaffCode.get("VC-10.6692")!; // ĐD Nguyễn Thị Minh Hương (user3)
+  const bsPhuongThao = userByStaffCode.get("VC-10.5325")!; // BS Nguyễn Thị Phương Thảo - PGĐ ĐT1
+  const bsMacHao = userByStaffCode.get("VC-10.2064")!; // BS Mạc Thị Hảo
+  const dsMaiPhuong = userByStaffCode.get("VC-33.10.003")!; // Bùi Mai Phương - Dân số Bậc 3
+  const dsCamVan = userByStaffCode.get("VC-33.10.004")!; // Hoàng Thị Cẩm Vân - Dân số Bậc 2
+  const duocCaoHuyen = userByStaffCode.get("VC-10.5251")!; // Cao Thị Huyền - Dược Bậc 3
+  const duocPhamDuyen = userByStaffCode.get("VC-10.2580")!; // Phạm Thị Duyên - Dược Bậc 2 Methadone
+  const ytccPhamHanh = userByStaffCode.get("VC-10.3157")!; // Phạm Thị Hạnh - YTCC Bậc 3
+  const hsThanhThuy = userByStaffCode.get("VC-10.3660")!; // Nguyễn Thanh Thủy - Hộ sinh Bậc 3
+  const cnttHuyenKhanh = userByStaffCode.get("VC-TYT-35")!; // Tẩy Huyền Khanh - CNTT Bậc 3
+  const ktMinhHue = userByStaffCode.get("VC-10.3156")!; // Vũ Thị Minh Huệ - Kế toán Bậc 3
+  const ctxhThuyHai = userByStaffCode.get("VC-10.3817")!; // Nguyễn Thị Thúy Hải - CTXH Bậc 3
+
+  const tytTasks = [
     {
-      stdCode: "DS-01",
-      code: "DS-TASK-01",
-      title: "Thu thập thông tin biến động dân số Phường Bến Nghé quý 3",
-      assignee: user1,
-      deadline: addHours(4), // Sắp đến hạn hôm nay
-      priority: "HIGH" as const,
-      taskType: "RECURRING" as const,
-      status: "IN_PROGRESS" as const,
-      assignedVolume: 20,
-      completedVolume: 15,
-      result: "Đã thu thập và lập 15/20 phiếu/bộ dữ liệu thực địa",
-      notes: "Ưu tiên hoàn tất 5 bộ dữ liệu còn lại trước 17h hôm nay",
-    },
-    {
-      stdCode: "DS-02",
-      code: "DS-TASK-02",
-      title: "Nhập và cập nhật dữ liệu dân số hộ gia đình đợt 1/2026",
-      assignee: user1,
-      deadline: addHours(48),
-      priority: "MEDIUM" as const,
-      taskType: "RECURRING" as const,
-      status: "IN_PROGRESS" as const,
-      assignedVolume: 10,
-      completedVolume: 4,
-      result: "Đã nhập 4 bộ dữ liệu vào phần mềm chuyên ngành",
-      notes: "Chờ kiểm tra chéo với dữ liệu tư pháp",
-    },
-    {
-      stdCode: "DS-03",
-      code: "DS-TASK-03",
-      title: "Kiểm tra và làm sạch dữ liệu biến động nhân khẩu tháng 8",
-      assignee: user2,
-      deadline: subHours(12), // Hoàn thành đúng hạn gần đây
-      priority: "LOW" as const,
-      taskType: "RECURRING" as const,
-      status: "COMPLETED" as const,
-      assignedVolume: 5,
-      completedVolume: 5,
-      result: "Đã rà soát và làm sạch 100% 5/5 bộ dữ liệu, phát hiện và sửa 12 lỗi trùng lặp",
-      notes: "Dữ liệu đã sẵn sàng để tổng hợp báo cáo",
-      kpiQuantity: 100,
-      kpiProgress: 100,
-      kpiQuality: 98,
-      kpiScore: 99.4,
-      kpiComment: "Thực hiện kỹ lưỡng, độ chính xác dữ liệu rất cao",
-    },
-    {
-      stdCode: "DS-04",
-      code: "DS-TASK-04",
-      title: "Tổng hợp báo cáo số liệu dân số quý II năm 2026",
-      assignee: user2,
+      stdCode: "CV.TYT.009",
+      code: "TYT-2026-001",
+      title: "Phê duyệt Đề án vị trí việc làm Trạm Y tế Cái Bầu giai đoạn 2027-2031 theo Hướng dẫn 07-HD/BTCTW",
+      field: "Quản lý điều hành & Tổ chức cán bộ",
+      assignee: adminUser,
       deadline: subHours(24),
-      priority: "MEDIUM" as const,
-      taskType: "RECURRING" as const,
-      status: "COMPLETED" as const,
-      assignedVolume: 2,
-      completedVolume: 2,
-      result: "Đã hoàn thành 2 bản báo cáo tổng hợp quý gửi Sở Y tế và Chi cục Dân số",
-      notes: "Báo cáo được cấp trên phê duyệt ngay trong lần nộp đầu tiên",
-      kpiQuantity: 100,
-      kpiProgress: 100,
-      kpiQuality: 95,
-      kpiScore: 98.5,
-      kpiComment: "Báo cáo đầy đủ, biểu đồ trực quan và đúng hạn",
-    },
-
-    // --- NHÓM 2: Thống kê, phân tích và dự báo dân số (45%) ---
-    {
-      stdCode: "DS-05",
-      code: "DS-TASK-05",
-      title: "Phân tích chuyên sâu biến động dân số 6 tháng đầu năm",
-      assignee: user3,
-      deadline: addHours(24),
-      priority: "HIGH" as const,
-      taskType: "RECURRING" as const,
-      status: "IN_PROGRESS" as const,
-      assignedVolume: 1,
-      completedVolume: 0.8,
-      result: "Đã hoàn thành dự thảo phần phân tích di dân và tăng tự nhiên (80%)",
-      notes: "Cần bổ sung so sánh với cùng kỳ năm 2025",
-    },
-    {
-      stdCode: "DS-06",
-      code: "DS-TASK-06",
-      title: "Phân tích cơ cấu độ tuổi và giới tính trên địa bàn quận",
-      assignee: user1,
-      deadline: addHours(72),
-      priority: "MEDIUM" as const,
-      taskType: "RECURRING" as const,
-      status: "TODO" as const,
-      assignedVolume: 1,
-      completedVolume: 0,
-      result: null,
-      notes: "Chuẩn bị nguồn số liệu điều tra mẫu",
-    },
-    {
-      stdCode: "DS-07",
-      code: "DS-TASK-07",
-      title: "Chuyên đề phân tích chỉ tiêu mức sinh và mất cân bằng giới tính khi sinh",
-      assignee: user2,
-      deadline: subHours(48), // Quá hạn
-      priority: "HIGH" as const,
-      taskType: "AD_HOC" as const,
-      status: "TODO" as const,
-      assignedVolume: 1,
-      completedVolume: 0,
-      result: null,
-      notes: "Quá hạn do đang chờ số liệu xác minh từ bệnh viện phụ sản",
-    },
-    {
-      stdCode: "DS-08",
-      code: "DS-TASK-08",
-      title: "Dự báo quy mô và nhu cầu dịch vụ dân số giai đoạn 2026-2030",
-      assignee: user3,
-      deadline: addHours(120),
-      priority: "HIGH" as const,
-      taskType: "AD_HOC" as const,
-      status: "IN_PROGRESS" as const,
-      assignedVolume: 1,
-      completedVolume: 0.5,
-      result: "Đã chạy xong mô hình dự báo dân số theo phương pháp thành phần",
-      notes: "Đang viết báo cáo thuyết minh kết quả",
-    },
-    {
-      stdCode: "DS-12",
-      code: "DS-TASK-09",
-      title: "Tổ chức điều tra khảo sát dân số thực tế tại địa bàn trọng điểm",
-      assignee: user1,
-      deadline: subHours(36),
-      priority: "MEDIUM" as const,
-      taskType: "AD_HOC" as const,
-      status: "COMPLETED" as const,
-      assignedVolume: 2,
-      completedVolume: 2,
-      result: "Đã hoàn thành 2 cuộc điều tra thực tế tại 2 khu phố đông dân cư",
-      notes: "Tỷ lệ phản hồi đạt 96.5%",
-      kpiQuantity: 100,
-      kpiProgress: 100,
-      kpiQuality: 92,
-      kpiScore: 97.6,
-      kpiComment: "Tổ chức chu đáo, dữ liệu điều tra tin cậy",
-    },
-    {
-      stdCode: "DS-13",
-      code: "DS-TASK-10",
-      title: "Lập báo cáo chuyên đề thực trạng già hóa dân số và an sinh xã hội",
-      assignee: user2,
-      deadline: addHours(168),
-      priority: "LOW" as const,
-      taskType: "RECURRING" as const,
-      status: "TODO" as const,
-      assignedVolume: 1,
-      completedVolume: 0,
-      result: null,
-      notes: "Phối hợp với phòng Lao động - Thương binh và Xã hội",
-    },
-
-    // --- NHÓM 3: Kế hoạch, chương trình và đề án dân số (30%) ---
-    {
-      stdCode: "DS-09",
-      code: "DS-TASK-11",
-      title: "Xây dựng kế hoạch công tác dân số và phát triển năm 2027",
-      assignee: user3,
-      deadline: addHours(96),
-      priority: "HIGH" as const,
-      taskType: "RECURRING" as const,
-      status: "IN_PROGRESS" as const,
-      assignedVolume: 2,
-      completedVolume: 1,
-      result: "Đã hoàn thành Kế hoạch tổng thể đợt 1, đang xây dựng kế hoạch phân bổ kinh phí",
-      notes: "Trình lãnh đạo ký duyệt dự thảo lần 1",
-    },
-    {
-      stdCode: "DS-10",
-      code: "DS-TASK-12",
-      title: "Xây dựng chương trình truyền thông dân số và sức khỏe sinh sản quý IV",
-      assignee: user1,
-      deadline: addHours(144),
-      priority: "MEDIUM" as const,
-      taskType: "RECURRING" as const,
-      status: "TODO" as const,
-      assignedVolume: 1,
-      completedVolume: 0,
-      result: null,
-      notes: "Chuẩn bị tài liệu và kịch bản truyền thông cơ sở",
-    },
-    {
-      stdCode: "DS-11",
-      code: "DS-TASK-13",
-      title: "Báo cáo đánh giá kết quả thực hiện chương trình mục tiêu dân số năm 2026",
-      assignee: user2,
-      deadline: subHours(96),
-      priority: "LOW" as const,
-      taskType: "AD_HOC" as const,
-      status: "CANCELLED" as const,
-      assignedVolume: 1,
-      completedVolume: 0,
-      result: "Hủy nhiệm vụ theo công văn điều chỉnh chương trình mục tiêu của UBND",
-      notes: "Chuyển nội dung sang lồng ghép vào báo cáo tổng kết năm",
-    },
-    {
-      stdCode: "DS-14",
-      code: "DS-TASK-14",
-      title: "Xây dựng Đề án nâng cao chất lượng dân số và tầm vóc địa phương giai đoạn 2026-2030",
-      assignee: user3,
-      deadline: subHours(20),
       priority: "HIGH" as const,
       taskType: "AD_HOC" as const,
       status: "COMPLETED" as const,
-      assignedVolume: 1,
-      completedVolume: 1,
-      result: "Đã hoàn thành toàn bộ hồ sơ Đề án, thẩm định và được HĐND/UBND thông qua",
-      notes: "Đề án trọng điểm cấp tỉnh/thành phố",
+      assignedVolume: 12,
+      completedVolume: 12,
+      result: "Đã hoàn thành Tờ trình, Đề án VTVL và Bộ 11 biểu mẫu HD07 trình UBND đặc khu Vân Đồn",
+      notes: "136.860 giờ B1 - 3.300 giờ B2 = 133.560 giờ ròng (70,15 FTE -> 70 biên chế)",
+      evidenceSource: "Hệ thống QLVB điện tử và Hồ sơ Đề án VTVL TYT Cái Bầu",
       kpiQuantity: 100,
       kpiProgress: 100,
       kpiQuality: 100,
       kpiScore: 100,
-      kpiComment: "Đề án xuất sắc, có tính khả thi và tác động xã hội lớn",
+      kpiComment: "Đề án chuẩn xác 100% theo HD 07-HD/BTCTW và Nghị định 232/2026/NĐ-CP",
+    },
+    {
+      stdCode: "CV.TYT.010",
+      code: "TYT-2026-002",
+      title: "Triển khai chương trình kiểm tra, giám sát Đảng quý IV/2026 của UBKT Đảng ủy TYT Cái Bầu",
+      field: "Công tác xây dựng Đảng (Kiêm nhiệm)",
+      assignee: pgdNguyen,
+      deadline: addHours(36),
+      priority: "HIGH" as const,
+      taskType: "RECURRING" as const,
+      status: "IN_PROGRESS" as const,
+      assignedVolume: 15,
+      completedVolume: 12,
+      result: "Đã ban hành kế hoạch và kiểm tra xong 2/3 Chi bộ trực thuộc",
+      notes: "Hoàn thiện biên bản kiểm tra Chi bộ 3 trước kỳ sinh hoạt Đảng ủy tháng 11",
+      evidenceSource: "Hồ sơ UBKT Đảng ủy (Quyết định 06-QĐ/ĐU và 12-QĐ/ĐU)",
+    },
+    {
+      stdCode: "CV.TYT.001",
+      code: "TYT-2026-003",
+      title: "Khám chuyên khoa Sản phụ khoa, siêu âm thai và hội chẩn ca bệnh khó tại Trạm chính tháng 10/2026",
+      field: "Khám chữa bệnh chuyên khoa",
+      assignee: bsTuanAnh,
+      deadline: subHours(12),
+      priority: "HIGH" as const,
+      taskType: "RECURRING" as const,
+      status: "COMPLETED" as const,
+      assignedVolume: 250,
+      completedVolume: 260,
+      result: "Đã khám chuyên khoa và siêu âm cho 260/250 lượt người bệnh BHYT (đạt 104%)",
+      notes: "Đảm bảo 100% quy trình kỹ thuật chuyên ngành Sản phụ khoa",
+      evidenceSource: "Phần mềm khám chữa bệnh HIS & Cổng giám định BHYT",
+      kpiQuantity: 100,
+      kpiProgress: 100,
+      kpiQuality: 98,
+      kpiScore: 99.4,
+      kpiComment: "Vượt định mức khối lượng giao, chất lượng chẩn đoán tốt",
+    },
+    {
+      stdCode: "CV.TYT.013",
+      code: "TYT-2026-004",
+      title: "Tổ chức tiêm chủng mở rộng định kỳ tháng 10/2026 (12 loại vắc xin) và giám sát phản ứng sau tiêm tại Trạm chính",
+      field: "Y tế dự phòng - Tiêm chủng mở rộng",
+      assignee: ddMinhHuong,
+      deadline: subHours(18),
+      priority: "HIGH" as const,
+      taskType: "RECURRING" as const,
+      status: "COMPLETED" as const,
+      assignedVolume: 180,
+      completedVolume: 180,
+      result: "Đã tiêm chủng an toàn 180/180 mũi vắc xin TCMR, cập nhật 100% lên Hệ thống TCMR Quốc gia",
+      notes: "Không ghi nhận trường hợp phản ứng nặng sau tiêm",
+      evidenceSource: "Hệ thống quản lý thông tin tiêm chủng quốc gia & Sổ tiêm chủng",
+      kpiQuantity: 100,
+      kpiProgress: 100,
+      kpiQuality: 97,
+      kpiScore: 99.1,
+      kpiComment: "Đảm bảo an toàn tiêm chủng tuyệt đối, dữ liệu đồng bộ kịp thời",
+    },
+    {
+      stdCode: "CV.TYT.014",
+      code: "TYT-2026-005",
+      title: "Rà soát, đo huyết áp sàng lọc cộng đồng và làm sạch Hồ sơ sức khỏe điện tử toàn dân (đợt 3/2026)",
+      field: "Quản lý sức khỏe toàn dân (43.141 dân)",
+      assignee: ddMinhHuong,
+      deadline: addHours(16),
+      priority: "HIGH" as const,
+      taskType: "RECURRING" as const,
+      status: "IN_PROGRESS" as const,
+      assignedVolume: 650,
+      completedVolume: 520,
+      result: "Đã chuẩn hóa 'đúng, đủ, sạch, sống' 520/650 hồ sơ sức khỏe điện tử nhân khẩu Khu 5, Khu 6",
+      notes: "Còn 130 hồ sơ cần đối chiếu CCCD định danh mức 2",
+      evidenceSource: "Phần mềm Hồ sơ sức khỏe điện tử toàn dân tỉnh Quảng Ninh",
+    },
+    {
+      stdCode: "CV.TYT.002",
+      code: "TYT-2026-006",
+      title: "Điều hành hoạt động chuyên môn Điểm trạm 1 (Đông Xá) và báo cáo kết quả công tác Chi bộ 2",
+      field: "Điều hành Điểm trạm & Công tác Đảng",
+      assignee: bsPhuongThao,
+      deadline: addHours(72),
+      priority: "MEDIUM" as const,
+      taskType: "RECURRING" as const,
+      status: "IN_PROGRESS" as const,
+      assignedVolume: 15,
+      completedVolume: 10,
+      result: "Đã duyệt lịch trực 24/24 Điểm trạm 1 và tổng hợp số liệu KCB tháng 10",
+      notes: "Chuẩn bị báo cáo giao ban toàn Trạm",
+      evidenceSource: "Sổ theo dõi văn bản Điểm trạm 1 & Sổ nghị quyết Chi bộ 2",
+    },
+    {
+      stdCode: "CV.TYT.003",
+      code: "TYT-2026-007",
+      title: "Khám bệnh, kê đơn ngoại trú BHYT và khám định kỳ bệnh nhân điều trị thay thế Methadone",
+      field: "Khám chữa bệnh BHYT & Methadone",
+      assignee: bsMacHao,
+      deadline: addHours(48),
+      priority: "MEDIUM" as const,
+      taskType: "RECURRING" as const,
+      status: "IN_PROGRESS" as const,
+      assignedVolume: 300,
+      completedVolume: 245,
+      result: "Đã khám và kê đơn BHYT 210 lượt, khám đánh giá liều Methadone 35 bệnh nhân",
+      notes: "Theo dõi sát tuân thủ điều trị của bệnh nhân mới vào chương trình",
+      evidenceSource: "Phần mềm HIS, Cổng BHYT & Hồ sơ bệnh án Methadone",
+    },
+    {
+      stdCode: "CV.TYT.021",
+      code: "TYT-2026-008",
+      title: "Phân tích biến động dân số (43.141 nhân khẩu) và xây dựng kế hoạch nâng cao chất lượng dân số năm 2027",
+      field: "Dân số & Phát triển",
+      assignee: dsMaiPhuong,
+      deadline: subHours(36),
+      priority: "HIGH" as const,
+      taskType: "RECURRING" as const,
+      status: "COMPLETED" as const,
+      assignedVolume: 20,
+      completedVolume: 20,
+      result: "Hoàn thành báo cáo phân tích 43.141 dân, 351 trẻ sinh, 7.475 NCT trên toàn địa bàn Cái Bầu",
+      notes: "Số liệu khớp 100% với Bộ biểu chỉ tiêu dân số 30/9/2026",
+      evidenceSource: "Bộ biểu tổng hợp chỉ tiêu Dân số năm 2026 & Phần mềm MIS",
+      kpiQuantity: 100,
+      kpiProgress: 100,
+      kpiQuality: 96,
+      kpiScore: 98.8,
+      kpiComment: "Số liệu chính xác, phân tích sâu cơ cấu dân số theo 19 thôn/khu",
+    },
+    {
+      stdCode: "CV.TYT.023",
+      code: "TYT-2026-009",
+      title: "Cập nhật biến động dân số vào kho dữ liệu MIS và lập hồ sơ khám sức khỏe định kỳ Người cao tuổi",
+      field: "Dân số & Chăm sóc Người cao tuổi",
+      assignee: dsCamVan,
+      deadline: subHours(10),
+      priority: "HIGH" as const,
+      taskType: "RECURRING" as const,
+      status: "IN_PROGRESS" as const,
+      assignedVolume: 400,
+      completedVolume: 350,
+      result: "Đã nhập MIS 350/400 hồ sơ khám sức khỏe định kỳ Người cao tuổi",
+      notes: "Đang rà soát 50 phiếu khám NCT từ Điểm trạm 3 chuyển về (Quá hạn nhẹ cần xử lý ngay)",
+      evidenceSource: "Kho dữ liệu điện tử Dân số MIS & Hồ sơ sức khỏe NCT",
+    },
+    {
+      stdCode: "CV.TYT.007",
+      code: "TYT-2026-010",
+      title: "Kiểm nhập, kiểm kê định kỳ thuốc BHYT, vắc xin dây chuyền lạnh GSP và thuốc Methadone tháng 10/2026",
+      field: "Dược - Vật tư - Vắc xin",
+      assignee: duocCaoHuyen,
+      deadline: subHours(48),
+      priority: "MEDIUM" as const,
+      taskType: "RECURRING" as const,
+      status: "COMPLETED" as const,
+      assignedVolume: 30,
+      completedVolume: 30,
+      result: "Đã hoàn thành 30 lô kiểm nhập/báo cáo xuất nhập tồn thuốc BHYT, vắc xin và Methadone",
+      notes: "Đảm bảo 100% cơ số thuốc cấp cứu tại 05 điểm trạm",
+      evidenceSource: "Phần mềm quản lý Dược & Biên bản kiểm kê kho GSP",
+      kpiQuantity: 100,
+      kpiProgress: 100,
+      kpiQuality: 98,
+      kpiScore: 99.4,
+      kpiComment: "Quản lý thuốc kiểm soát đặc biệt và vắc xin đúng quy chế Dược",
+    },
+    {
+      stdCode: "CV.TYT.008",
+      code: "TYT-2026-011",
+      title: "Trực tiếp cấp phát thuốc điều trị thay thế Methadone hằng ngày và đối chiếu sổ thuốc kiểm soát đặc biệt",
+      field: "Điều trị Methadone & Dược cơ sở",
+      assignee: duocPhamDuyen,
+      deadline: addHours(24),
+      priority: "HIGH" as const,
+      taskType: "RECURRING" as const,
+      status: "IN_PROGRESS" as const,
+      assignedVolume: 1500,
+      completedVolume: 1420,
+      result: "Đã cấp phát chính xác 1.420 lượt uống Methadone trong tháng, khớp 100% tồn kho thực tế",
+      notes: "Duy trì trực cấp phát xuyên suốt cả Thứ Bảy, Chủ nhật",
+      evidenceSource: "Sổ theo dõi cấp phát thuốc Methadone hằng ngày tại Cơ sở Methadone",
+    },
+    {
+      stdCode: "CV.TYT.011",
+      code: "TYT-2026-012",
+      title: "Điều tra dịch tễ, giám sát véc-tơ Sốt xuất huyết và xử lý ổ dịch truyền nhiễm giao mùa",
+      field: "Y tế dự phòng - Phòng chống dịch",
+      assignee: ytccPhamHanh,
+      deadline: addHours(60),
+      priority: "MEDIUM" as const,
+      taskType: "RECURRING" as const,
+      status: "IN_PROGRESS" as const,
+      assignedVolume: 18,
+      completedVolume: 14,
+      result: "Đã giám sát dịch tễ và phun hóa chất xử lý 14/18 điểm nguy cơ cao",
+      notes: "Báo cáo nhanh trên Hệ thống giám sát bệnh truyền nhiễm TT 54/2015/TT-BYT",
+      evidenceSource: "Hệ thống báo cáo bệnh truyền nhiễm TT 54/2015/TT-BYT & Sổ giám sát dịch",
+    },
+    {
+      stdCode: "CV.TYT.017",
+      code: "TYT-2026-013",
+      title: "Quản lý thai nghén, tư vấn sàng lọc trước sinh - sơ sinh và dịch vụ KHHGĐ quý IV/2026",
+      field: "Chăm sóc sức khỏe sinh sản",
+      assignee: hsThanhThuy,
+      deadline: addHours(96),
+      priority: "LOW" as const,
+      taskType: "RECURRING" as const,
+      status: "IN_PROGRESS" as const,
+      assignedVolume: 220,
+      completedVolume: 165,
+      result: "Đã khám thai, tư vấn sàng lọc trước sinh - sơ sinh và KHHGĐ 165 lượt",
+      notes: "Theo dõi sát các thai phụ nguy cơ cao trên địa bàn",
+      evidenceSource: "Sổ khám thai, Sổ KHHGĐ và Bộ biểu chỉ tiêu SKSS 2026",
+    },
+    {
+      stdCode: "CV.TYT.025",
+      code: "TYT-2026-014",
+      title: "Vận hành liên thông dữ liệu KCB BHYT chuẩn XML 4750 và số hóa, ký số văn bản đi - đến",
+      field: "Ứng dụng CNTT & Chuyển đổi số",
+      assignee: cnttHuyenKhanh,
+      deadline: subHours(6),
+      priority: "HIGH" as const,
+      taskType: "RECURRING" as const,
+      status: "COMPLETED" as const,
+      assignedVolume: 150,
+      completedVolume: 150,
+      result: "100% văn bản đi - đến được ký số; 100% hồ sơ KCB BHYT tại 05 điểm trạm đẩy cổng đúng hạn",
+      notes: "Tiết kiệm 3.300 giờ/năm cho toàn đơn vị theo Biểu B2",
+      evidenceSource: "Hệ thống QLVB điện tử & Cổng tiếp nhận dữ liệu giám định BHYT",
+      kpiQuantity: 100,
+      kpiProgress: 100,
+      kpiQuality: 100,
+      kpiScore: 100,
+      kpiComment: "Hạ tầng HIS/BHYT thông suốt, minh chứng chuyển đổi số Biểu B2 rõ ràng",
+    },
+    {
+      stdCode: "CV.TYT.026",
+      code: "TYT-2026-015",
+      title: "Tổng hợp hồ sơ thanh quyết toán chi phí KCB BHYT quý III/2026 và kiểm kê tài sản công 05 điểm trạm",
+      field: "Tài chính - Kế toán",
+      assignee: ktMinhHue,
+      deadline: addHours(48),
+      priority: "HIGH" as const,
+      taskType: "RECURRING" as const,
+      status: "IN_PROGRESS" as const,
+      assignedVolume: 45,
+      completedVolume: 38,
+      result: "Đã đối chiếu khớp số liệu BHYT quý III và hoàn thành kiểm kê tài sản tại Trạm chính, ĐT1, ĐT2",
+      notes: "Còn đối chiếu biên bản kiểm kê Điểm trạm 3 và Điểm trạm 4",
+      evidenceSource: "Phần mềm Kế toán MISA & Cổng giám định BHYT",
+    },
+    {
+      stdCode: "CV.TYT.024",
+      code: "TYT-2026-016",
+      title: "Lập hồ sơ quản lý sức khỏe đối tượng bảo trợ xã hội/NKT và tư vấn tâm lý bệnh nhân Methadone",
+      field: "Công tác xã hội & Hành chính",
+      assignee: ctxhThuyHai,
+      deadline: addHours(120),
+      priority: "MEDIUM" as const,
+      taskType: "RECURRING" as const,
+      status: "TODO" as const,
+      assignedVolume: 140,
+      completedVolume: 0,
+      result: null,
+      notes: "Triển khai theo Quy trình Công tác xã hội tại Trạm Y tế Cái Bầu",
+      evidenceSource: "Hồ sơ đối tượng BTXH/NKT & Sổ tư vấn tâm lý Methadone",
     },
   ];
 
-  for (const item of pilotTasksDefinition) {
+  for (const item of tytTasks) {
     const std = stdMap.get(item.stdCode);
     if (!std) {
-      console.warn(`Warning: Standard task with code ${item.stdCode} not found.`);
+      console.warn(`Warning: Standard task ${item.stdCode} not found.`);
       continue;
     }
 
@@ -417,7 +538,7 @@ export async function runSeed() {
       data: {
         code: item.code,
         title: item.title,
-        field: "Dân số & Phát triển",
+        field: item.field,
         assigneeId: item.assignee.id,
         deadline: item.deadline,
         priority: item.priority,
@@ -425,6 +546,7 @@ export async function runSeed() {
         status: item.status,
         result: item.result,
         notes: item.notes,
+        evidenceSource: item.evidenceSource,
         positionId: std.positionId,
         groupId: std.groupId,
         standardTaskId: std.id,
@@ -442,15 +564,15 @@ export async function runSeed() {
           kpiProgress: item.kpiProgress,
           kpiQuality: item.kpiQuality,
           kpiScore: item.kpiScore,
-          kpiEvaluatorId: admin.id,
-          kpiEvaluatedAt: new Date(now.getTime() - 1000 * 60 * 60 * 6),
+          kpiEvaluatorId: adminUser.id,
+          kpiEvaluatedAt: new Date(now.getTime() - 1000 * 60 * 60 * 4),
           kpiComment: item.kpiComment,
         }),
       },
     });
   }
 
-  console.log("Seed finished successfully! 14 sample tasks for Pilot Dân số created.");
+  console.log(`Seed finished successfully! Created ${tytTasks.length} realistic tasks for Trạm Y tế Cái Bầu.`);
 }
 
 if (require.main === module) {

@@ -149,29 +149,46 @@ export class WebPushChannelHandler implements NotificationChannelHandler {
     const subscriptions = await prisma.pushSubscription.findMany({
       where: { userId: ctx.user.id },
     });
+    if (subscriptions.length === 0) return;
+
+    let anySuccess = false;
+    let lastError: string | undefined;
 
     for (const sub of subscriptions) {
-      const result = await sendWebPushNotification(sub.keys, {
-        title: ctx.subject,
-        body: ctx.bodyText,
-        url: ctx.taskUrl,
-        taskId: ctx.task.id,
-      });
-
-      await prisma.notificationLog.create({
-        data: {
-          userId: ctx.user.id,
+      const result = await sendWebPushNotification(
+        sub.keys,
+        {
+          title: ctx.subject,
+          body: ctx.bodyText,
+          url: ctx.taskUrl,
           taskId: ctx.task.id,
-          notificationType: ctx.notificationType,
-          channel: "WEB_PUSH",
-          ruleKey: ctx.ruleKey,
-          deadline: ctx.deadline,
-          sentAt: result.success ? new Date() : null,
-          status: result.success ? "SENT" : "FAILED",
-          errorMessage: result.error,
         },
-      });
+        sub.endpoint
+      );
+
+      if (result.success) {
+        anySuccess = true;
+      } else {
+        lastError = result.error;
+        if (result.gone) {
+          await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
+        }
+      }
     }
+
+    await prisma.notificationLog.create({
+      data: {
+        userId: ctx.user.id,
+        taskId: ctx.task.id,
+        notificationType: ctx.notificationType,
+        channel: "WEB_PUSH",
+        ruleKey: ctx.ruleKey,
+        deadline: ctx.deadline,
+        sentAt: anySuccess ? new Date() : null,
+        status: anySuccess ? "SENT" : "FAILED",
+        errorMessage: anySuccess ? null : lastError,
+      },
+    });
   }
 }
 

@@ -41,6 +41,7 @@ interface TaskItem {
   assignedScore?: number | null;
   completedScore?: number | null;
   completionRate?: number | null;
+  group?: { id: string; name: string; code: string; weight: number } | null;
 }
 
 interface UserItem {
@@ -276,6 +277,7 @@ export default function ReportsPage() {
         title: t.title,
         assignedScore: t.assignedScore,
         completedScore: t.completedScore,
+        groupWeight: t.group?.weight ?? null,
         kpiScore: t.kpiScore,
         status: t.status,
       }))
@@ -356,6 +358,7 @@ export default function ReportsPage() {
             title: t.title,
             assignedScore: t.assignedScore,
             completedScore: t.completedScore,
+            groupWeight: t.group?.weight ?? null,
             kpiScore: t.kpiScore,
             status: t.status,
           }))

@@ -4,8 +4,20 @@ import { getCurrentUser } from "@/lib/auth";
 import { updateGoogleCalendarEvent, deleteGoogleCalendarEvent } from "@/lib/google-calendar";
 import { NotificationEngine } from "@/lib/notification-engine";
 import { fromLocalInputValue } from "@/lib/utils";
+import { isExecutive, isManager } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
+
+function extractRankNumber(...sources: (string | null | undefined)[]): number | null {
+  for (const src of sources) {
+    if (!src) continue;
+    const mCode = src.match(/\.B([1-5])\b/i) || src.match(/\bB([1-5])\b/);
+    if (mCode) return Number(mCode[1]);
+    const mText = src.match(/Bậc\s*([1-5])/i);
+    if (mText) return Number(mText[1]);
+  }
+  return null;
+}
 
 export async function PATCH(
   request: Request,
@@ -20,6 +32,11 @@ export async function PATCH(
     const taskId = params.id;
     const task = await prisma.task.findUnique({
       where: { id: taskId },
+      include: {
+        assignee: {
+          select: { id: true, department: true, workLocation: true },
+        },
+      },
     });
 
     if (!task) {
@@ -28,13 +45,35 @@ export async function PATCH(
 
     const body = await request.json();
 
-    if (user.role !== "ADMIN") {
+    const isDeptManager =
+      user.role === "DEPARTMENT_HEAD" &&
+      ((user.department &&
+        task.assignee?.department &&
+        user.department.trim().toLowerCase() === task.assignee.department.trim().toLowerCase()) ||
+        (user.workLocation &&
+          task.assignee?.workLocation &&
+          user.workLocation.trim().toLowerCase() === task.assignee.workLocation.trim().toLowerCase()) ||
+        task.assigneeId === user.id);
+    const hasFullManageRights = isExecutive(user.role) || isDeptManager;
+
+    if (!hasFullManageRights) {
       // User can update status, result, notes, completedVolume
       if (task.assigneeId !== user.id) {
         return NextResponse.json({ error: "Bạn không có quyền chỉnh sửa công việc này" }, { status: 403 });
       }
 
-      const { status, result, notes, completedVolume } = body;
+      const { status, result, notes, evidenceSource, evidenceFiles, completedVolume, title, taskSource } = body;
+
+      // Chặn triển khai nếu nhiệm vụ chưa được Cán bộ phụ trách bộ phận phê duyệt
+      if (task.approvalStatus !== "APPROVED") {
+        if (status && status !== "TODO") {
+          const statusText = task.approvalStatus === "PENDING" ? "đang chờ Cán bộ phụ trách phê duyệt" : "đã bị từ chối phê duyệt";
+          return NextResponse.json(
+            { error: `Nhiệm vụ ${statusText}. Phải được Cán bộ phụ trách bộ phận phê duyệt trước khi có thể triển khai thực hiện.` },
+            { status: 400 }
+          );
+        }
+      }
 
       // Audit H5: task COMPLETED hoặc đã chấm KPI bị đóng băng — USER không được
       // đổi trạng thái/khối lượng (chỉ Admin mở lại). result/notes vẫn chỉnh được.
@@ -80,8 +119,14 @@ export async function PATCH(
         where: { id: taskId },
         data: {
           ...(status && { status }),
+          ...(task.approvalStatus === "PENDING" && title && { title: title.trim() }),
+          ...(task.approvalStatus === "PENDING" && taskSource !== undefined && { taskSource }),
           ...(result !== undefined && { result }),
           ...(notes !== undefined && { notes }),
+          ...(evidenceSource !== undefined && { evidenceSource }),
+          ...(evidenceFiles !== undefined && {
+            evidenceFiles: evidenceFiles ? (typeof evidenceFiles === "string" ? evidenceFiles : JSON.stringify(evidenceFiles)) : null,
+          }),
           ...(completedVolume !== undefined && {
             completedVolume: parsedCompletedVol,
             completedScore: newCompletedScore,
@@ -90,6 +135,12 @@ export async function PATCH(
         },
         include: {
           assignee: {
+            select: { id: true, fullName: true, email: true, department: true },
+          },
+          approver: {
+            select: { id: true, fullName: true, email: true },
+          },
+          creator: {
             select: { id: true, fullName: true, email: true },
           },
           kpiEvaluator: {
@@ -129,6 +180,8 @@ export async function PATCH(
       status,
       result,
       notes,
+      evidenceSource,
+      evidenceFiles,
       positionId,
       groupId,
       standardTaskId,
@@ -138,6 +191,9 @@ export async function PATCH(
       conversionFactor,
       assignedVolume,
       completedVolume,
+      taskSource,
+      approvalStatus,
+      approvalNote,
     } = body;
 
     if (taskType !== undefined && taskType !== "RECURRING" && taskType !== "AD_HOC") {
@@ -173,6 +229,35 @@ export async function PATCH(
         snapBenchmarkScore = stdTask.benchmarkScore;
         snapComplexityLevel = stdTask.complexityLevel;
         snapConversionFactor = stdTask.conversionFactor;
+      }
+    }
+
+    const finalAssigneeId = assigneeId || task.assigneeId;
+    const finalField = field || task.field;
+    const [targetPos, assigneeUser] = await Promise.all([
+      snapPositionId ? prisma.jobPosition.findUnique({ where: { id: snapPositionId } }) : Promise.resolve(null),
+      prisma.user.findUnique({
+        where: { id: finalAssigneeId },
+        include: { position: true },
+      }),
+    ]);
+
+    const requiredRank = extractRankNumber(targetPos?.code, targetPos?.name, targetPos?.careerRank, finalField);
+    if (requiredRank !== null) {
+      const userRank = extractRankNumber(
+        assigneeUser?.position?.code,
+        assigneeUser?.position?.name,
+        assigneeUser?.position?.careerRank
+      );
+      if (userRank === null || userRank < requiredRank) {
+        return NextResponse.json(
+          {
+            error: `Lĩnh vực/VTVL yêu cầu từ Bậc ${requiredRank} (B${requiredRank}–B5) trở lên. Viên chức "${
+              assigneeUser?.fullName || ""
+            }" hiện đang ở ${assigneeUser?.position?.code || "chưa đủ bậc"} (Bậc ${userRank ?? "chưa xếp"}).`,
+          },
+          { status: 400 }
+        );
       }
     }
 
@@ -239,8 +324,18 @@ export async function PATCH(
         ...(priority && { priority }),
         ...(taskType && { taskType }),
         ...(status && { status }),
+        ...(taskSource !== undefined && { taskSource }),
+        ...(approvalStatus && {
+          approvalStatus,
+          ...(approvalStatus === "APPROVED" && !task.approvedAt && { approverId: user.id, approvedAt: new Date() }),
+        }),
+        ...(approvalNote !== undefined && { approvalNote }),
         ...(result !== undefined && { result }),
         ...(notes !== undefined && { notes }),
+        ...(evidenceSource !== undefined && { evidenceSource }),
+        ...(evidenceFiles !== undefined && {
+          evidenceFiles: evidenceFiles ? (typeof evidenceFiles === "string" ? evidenceFiles : JSON.stringify(evidenceFiles)) : null,
+        }),
         positionId: snapPositionId,
         groupId: snapGroupId,
         standardTaskId: snapStandardTaskId,
@@ -256,6 +351,12 @@ export async function PATCH(
       },
       include: {
         assignee: {
+          select: { id: true, fullName: true, email: true, department: true },
+        },
+        approver: {
+          select: { id: true, fullName: true, email: true },
+        },
+        creator: {
           select: { id: true, fullName: true, email: true },
         },
         kpiEvaluator: {
@@ -310,8 +411,8 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Chỉ Admin mới có quyền xóa công việc" }, { status: 403 });
+    if (!isExecutive(user.role)) {
+      return NextResponse.json({ error: "Chỉ Ban Giám đốc và Admin mới có quyền xóa công việc" }, { status: 403 });
     }
 
     const taskId = params.id;

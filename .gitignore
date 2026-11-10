@@ -42,3 +42,7 @@ verify_*.ts
 dev-server.log
 .next_old
 
+# user uploads
+/public/uploads/*
+!/public/uploads/.gitkeep
+

@@ -10,6 +10,9 @@ datasource db {
 
 enum Role {
   ADMIN
+  DIRECTOR
+  DEPUTY_DIRECTOR
+  DEPARTMENT_HEAD
   USER
 }
 
@@ -64,43 +67,66 @@ enum ComplexityLevel {
   N5 // Hệ số 2.50
 }
 
+enum ApprovalStatus {
+  PENDING   // Chờ phê duyệt
+  APPROVED  // Đã phê duyệt
+  REJECTED  // Từ chối phê duyệt
+}
+
 model User {
-  id               String            @id @default(uuid())
-  email            String            @unique
-  passwordHash     String
-  fullName         String
-  zaloId           String?           // Zalo user_id (OA) — audit H9: recipient thật cho kênh Zalo
-  role             Role              @default(USER)
-  status           UserStatus        @default(ACTIVE)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  tasks            Task[]            @relation("AssignedTasks")
-  evaluatedTasks   Task[]            @relation("EvaluatedTasks")
-  logs             NotificationLog[]
-  inAppAlerts      InAppNotification[]
+  id                String             @id @default(uuid())
+  email             String             @unique
+  passwordHash      String
+  fullName          String
+  zaloId            String?            // Zalo user_id (OA) — audit H9: recipient thật cho kênh Zalo
+  staffCode         String?            // Mã nguồn lực Biểu D1 (VD: "VC-10.2669")
+  positionId        String?            // Vị trí việc làm / Bậc nghề nghiệp theo NĐ 232
+  position          JobPosition?       @relation("PositionUsers", fields: [positionId], references: [id], onDelete: SetNull)
+  qualification     String?            // Trình độ chuyên môn / Mã ngạch hiện hưởng (Biểu D1)
+  department        String?            // 5 Bộ phận: Khám bệnh, Văn phòng, Dân số, Phòng bệnh, Dược
+  workLocation      String?            @default("Trạm chính") // Trạm chính / Cơ sở Methadone / Điểm trạm 1..4
+  concurrentHours   Float?             @default(120) // Giờ kiêm nhiệm Đảng, Đoàn thể, Điểm trạm (Biểu D1)
+  role              Role               @default(USER)
+  status            UserStatus         @default(ACTIVE)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  tasks             Task[]             @relation("AssignedTasks")
+  evaluatedTasks    Task[]             @relation("EvaluatedTasks")
+  directorAdjustedTasks Task[]         @relation("DirectorAdjustedTasks")
+  createdTasks      Task[]             @relation("CreatedTasks")
+  approvedTasks     Task[]             @relation("ApprovedTasks")
+  logs              NotificationLog[]
+  inAppAlerts       InAppNotification[]
   pushSubscriptions PushSubscription[]
 }
 
 model JobPosition {
-  id            String         @id @default(uuid())
-  code          String         @unique // e.g. "VT-DAN-SO"
-  name          String         // e.g. "Dân số"
-  description   String?
-  isActive      Boolean        @default(true)
-  order         Int            @default(0)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  groups        JobTaskGroup[]
-  standardTasks StandardTask[]
-  tasks         Task[]
+  id                String         @id @default(uuid())
+  code              String         @unique // e.g. "VTVL.232.01.B4" hoặc "VT-DAN-SO"
+  name              String         // e.g. "1.1. Bác sĩ - Bậc 4"
+  description       String?
+  careerRank        String?        // Bậc nghề nghiệp NĐ 232 (Bậc 4, Bậc 3, Bậc 2, Bậc 1-4...)
+  targetRatio       Float?         // Tỷ lệ % cơ cấu bậc nghề nghiệp theo PL NĐ 232
+  approvedQuota     Int?           // Số người cần bố trí theo phương án Biểu C3/D2 (tổng 70)
+  currentHeadcount  Int?           // Nhân sự hiện có chốt 30/9/2026 tại Biểu D1 (tổng 67)
+  standardHoursYear Int            @default(1904) // Quỹ giờ quy đổi PP2 = 1.904 giờ/năm
+  method            String?        @default("PP1+PP2") // Phương pháp xác định nhu cầu C3
+  isActive          Boolean        @default(true)
+  order             Int            @default(0)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  groups            JobTaskGroup[]
+  standardTasks     StandardTask[]
+  tasks             Task[]
+  users             User[]         @relation("PositionUsers")
 }
 
 model JobTaskGroup {
   id            String         @id @default(uuid())
   positionId    String
   position      JobPosition    @relation(fields: [positionId], references: [id], onDelete: Cascade)
-  code          String         // e.g. "GRP-01"
-  name          String         // Tên nhóm công việc
+  code          String         // e.g. "GRP-01" hoặc mã nhiệm vụ A1
+  name          String         // Tên nhóm công việc / nhiệm vụ A1
   weight        Float          @default(100.0) // Trọng số nhóm (%)
   isActive      Boolean        @default(true)
   order         Int            @default(0)
@@ -113,22 +139,29 @@ model JobTaskGroup {
 }
 
 model StandardTask {
-  id               String          @id @default(uuid())
-  positionId       String
-  position         JobPosition     @relation(fields: [positionId], references: [id], onDelete: Cascade)
-  groupId          String
-  group            JobTaskGroup    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  code             String          @unique // e.g. "DS-01"
-  name             String          // Tên sản phẩm / công việc chuẩn
-  unit             String          // Đơn vị tính (ĐVT)
-  benchmarkScore   Float           // Điểm chuẩn
-  complexityLevel  ComplexityLevel // Mức độ phức tạp N1-N5
-  conversionFactor Float           // Hệ số quy đổi (1.00, 1.25, 1.50, 2.00, 2.50)
-  isActive         Boolean         @default(true)
-  order            Int             @default(0)
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  tasks            Task[]
+  id                String          @id @default(uuid())
+  positionId        String
+  position          JobPosition     @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  groupId           String
+  group             JobTaskGroup    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  code              String          @unique // e.g. "CV.TYT.001" hoặc "QD1399-01-01"
+  name              String          // Tên sản phẩm / công việc chuẩn
+  unit              String          // Đơn vị tính (ĐVT)
+  benchmarkScore    Float           // Điểm chuẩn (QĐ 1399/QĐ-SYT)
+  complexityLevel   ComplexityLevel // Mức độ phức tạp N1-N5
+  conversionFactor  Float           // Hệ số quy đổi (1.00, 1.25, 1.50, 2.00, 2.50)
+  missionCodeA1     String?         // Mã nhiệm vụ Biểu A1 (VD: "NV.TYT.B.II")
+  productCode       String?         // Mã SP chuẩn Biểu B1/DM_SAN_PHAM (VD: "SP.YT.BS.01")
+  annualVolume      Float?          // Sản lượng năm cơ sở Biểu B1 (01/10/2025 - 30/9/2026)
+  standardMinutes   Float?          // Trung bình phút/SP đo thực tế Biểu B1
+  extraHoursYear    Float?          @default(0) // Giờ bổ sung định kỳ/trực Biểu B1
+  digitalSavedHours Float?          @default(0) // Giờ giảm số hóa hợp lệ Biểu B2
+  evidenceSource    String?         // Nguồn số liệu kiểm chứng (HIS, BHYT, Sổ tiêm...)
+  isActive          Boolean         @default(true)
+  order             Int             @default(0)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  tasks             Task[]
 }
 
 model Task {
@@ -138,12 +171,26 @@ model Task {
   field          String            // Lĩnh vực
   assigneeId     String            // Người thực hiện
   assignee       User              @relation("AssignedTasks", fields: [assigneeId], references: [id], onDelete: Cascade)
+  department     String?           // Bộ phận phụ trách (Khám bệnh, Văn phòng, Dân số, Phòng bệnh, Dược)
   deadline       DateTime          // Ngày hạn
   priority       Priority          @default(LOW) // Mức độ ưu tiên
   taskType       TaskType          @default(RECURRING) // Loại công việc: Thường xuyên / Đột xuất
   status         TaskStatus        @default(TODO) // Trạng thái
+  taskSource     String?           // Nguồn nhiệm vụ đột xuất (Chính quyền điện tử, Cấp trên giao trực tiếp, Văn bản điều hành...)
+  
+  // Workflow phê duyệt nhiệm vụ
+  approvalStatus ApprovalStatus    @default(APPROVED) // Mặc định việc đã tạo/giao bởi quản lý là APPROVED, viên chức tự tạo là PENDING
+  approverId     String?           // Cán bộ phụ trách bộ phận / Lãnh đạo phê duyệt
+  approver       User?             @relation("ApprovedTasks", fields: [approverId], references: [id], onDelete: SetNull)
+  approvedAt     DateTime?         // Thời điểm phê duyệt
+  approvalNote   String?           // Ý kiến phê duyệt / lý do từ chối
+  createdById    String?           // Người khởi tạo nhiệm vụ (nếu viên chức tự đề xuất việc đột xuất)
+  creator        User?             @relation("CreatedTasks", fields: [createdById], references: [id], onDelete: SetNull)
+
   result         String?           // Kết quả
   notes          String?           // Ghi chú
+  evidenceSource String?           // Nguồn kiểm chứng sản phẩm (HIS, BHYT, QLVB...)
+  evidenceFiles  String?           // File đính kèm minh chứng (JSON: [{ name, url, size, type }])
   googleEventId  String?           // ID event Google Calendar tương ứng
   
   // Standard Task Catalog & Score Snapshot Fields
@@ -163,15 +210,31 @@ model Task {
   completedScore   Float?          // Điểm thực hiện = completedVolume * benchmarkScore * conversionFactor
   completionRate   Float?          // Tỷ lệ hoàn thành = completedScore / assignedScore * 100%
 
-  // KPI Scoring Fields
-  kpiQuantity    Float?            // Điểm số lượng (0 - 100)
-  kpiProgress    Float?            // Điểm tiến độ (0 - 100)
-  kpiQuality     Float?            // Điểm chất lượng (0 - 100)
-  kpiScore       Float?            // KPI % tổng = (kpiQuantity + kpiProgress + kpiQuality) / 3
-  kpiEvaluatorId String?           // ID người chấm điểm
-  kpiEvaluator   User?             @relation("EvaluatedTasks", fields: [kpiEvaluatorId], references: [id], onDelete: SetNull)
-  kpiEvaluatedAt DateTime?         // Thời điểm chấm điểm
-  kpiComment     String?           // Nhận xét của người đánh giá
+  // KPI Scoring Fields (Quy trình 3 cấp: Cá nhân tự chấm -> Phụ trách BP duyệt/điều chỉnh -> BGD điều chỉnh khi có bằng chứng)
+  // 1. Cá nhân tự chấm điểm KPI
+  selfKpiQuantity    Float?            // Cá nhân tự chấm số lượng (0 - 100)
+  selfKpiProgress    Float?            // Cá nhân tự chấm tiến độ (0 - 100)
+  selfKpiQuality     Float?            // Cá nhân tự chấm chất lượng (0 - 100)
+  selfKpiScore       Float?            // Điểm tự chấm % tổng = (selfKpiQuantity + selfKpiProgress + selfKpiQuality) / 3
+  selfKpiComment     String?           // Ý kiến tự nhận xét của cá nhân
+  selfKpiEvaluatedAt DateTime?         // Thời điểm cá nhân tự chấm
+
+  // 2. Điểm KPI chính thức (do Phụ trách bộ phận phê duyệt / điều chỉnh)
+  kpiQuantity        Float?            // Điểm số lượng (0 - 100)
+  kpiProgress        Float?            // Điểm tiến độ (0 - 100)
+  kpiQuality         Float?            // Điểm chất lượng (0 - 100)
+  kpiScore           Float?            // KPI % tổng = (kpiQuantity + kpiProgress + kpiQuality) / 3
+  kpiEvaluatorId     String?           // ID Phụ trách bộ phận đánh giá
+  kpiEvaluator       User?             @relation("EvaluatedTasks", fields: [kpiEvaluatorId], references: [id], onDelete: SetNull)
+  kpiEvaluatedAt     DateTime?         // Thời điểm Phụ trách BP đánh giá
+  kpiComment         String?           // Nhận xét của Phụ trách bộ phận
+
+  // 3. Đề nghị điều chỉnh của Ban Giám đốc khi có bằng chứng cụ thể
+  directorEvidence   String?           // Bằng chứng cụ thể (Bắt buộc khi BGD đề nghị điều chỉnh)
+  directorComment    String?           // Ý kiến chỉ đạo / căn cứ điều chỉnh của Ban Giám đốc
+  directorAdjusterId String?           // ID Giám đốc / PGĐ đề nghị điều chỉnh
+  directorAdjuster   User?             @relation("DirectorAdjustedTasks", fields: [directorAdjusterId], references: [id], onDelete: SetNull)
+  directorAdjustedAt DateTime?         // Thời điểm Ban Giám đốc điều chỉnh
 
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt

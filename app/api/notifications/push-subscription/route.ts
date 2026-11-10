@@ -52,3 +52,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Lỗi lưu Web Push subscription" }, { status: 500 });
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const { endpoint } = body;
+
+    if (endpoint) {
+      await prisma.pushSubscription.deleteMany({
+        where: { userId: user.id, endpoint: String(endpoint) },
+      });
+    } else {
+      await prisma.pushSubscription.deleteMany({
+        where: { userId: user.id },
+      });
+    }
+
+    return NextResponse.json({ message: "Đã hủy đăng ký Web Push" });
+  } catch (error: any) {
+    console.error("[Push Subscription DELETE Error]:", error);
+    return NextResponse.json({ error: "Lỗi hủy đăng ký Web Push" }, { status: 500 });
+  }
+}

@@ -19,6 +19,8 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { formatDate, formatDateOnly, formatPriority, formatStatus, toLocalInputValue, fetchAllTaskRows } from "@/lib/utils";
+import { Role } from "@prisma/client";
+import { isManager } from "@/lib/permissions";
 
 interface CalendarTask {
   id: string;
@@ -44,7 +46,7 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 7, 23)); // August 2026 default
   const [tasks, setTasks] = useState<CalendarTask[]>([]);
   const [users, setUsers] = useState<UserItem[]>([]);
-  const [currentUser, setCurrentUser] = useState<{ id: string; role: "ADMIN" | "USER" } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ id: string; role: Role; workLocation?: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -83,8 +85,8 @@ export default function CalendarPage() {
         if (cancelled) return;
         const me = data.user || null;
         setCurrentUser(me);
-        // Audit M14: chỉ ADMIN cần danh sách người dùng — USER gọi /api/users sẽ 403.
-        if (me && me.role === "ADMIN") {
+        // Cấp quản lý tải danh sách người dùng để lọc theo nhân sự
+        if (me && isManager(me.role)) {
           const uRes = await fetch("/api/users");
           if (uRes.ok) {
             const uData = await uRes.json();
@@ -507,7 +509,7 @@ export default function CalendarPage() {
               >
                 Hôm nay
               </button>
-              {currentUser?.role === "ADMIN" && (
+              {isManager(currentUser?.role) && (
                 <button
                   onClick={openCreateModal}
                   className="px-3 py-1.5 bg-white text-blue-700 hover:bg-blue-50 font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1 cursor-pointer"
@@ -711,7 +713,7 @@ export default function CalendarPage() {
             <div className="pt-2 flex items-center justify-between">
               {/* Audit M14: USER chỉ xem — không hiện nút sửa toàn phần (server sẽ bỏ qua các
                   trường title/deadline/assignee của USER, gây mất chỉnh sửa im lặng). */}
-              {currentUser?.role === "ADMIN" && (
+              {isManager(currentUser?.role) && (
                 <button
                   onClick={() => {
                     setViewingTask(null);
