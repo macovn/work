@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { Client } from "pg";
 
 let isSchemaEnsured = false;
 let isEnsuring = false;
@@ -47,6 +48,8 @@ const DDL_STATEMENTS = [
  * Tự động đảm bảo schema cơ sở dữ liệu trên Neon/PostgreSQL luôn có đầy đủ
  * các cột và enum mới nhất, bảo vệ hệ thống khỏi lỗi P2022 (missing column)
  * khi chạy trên môi trường serverless/Vercel.
+ *
+ * Lưu ý: Kết nối trực tiếp (bỏ -pooler) để tránh PgBouncer freeze trên DDL.
  */
 export async function ensureDatabaseSchema(force = false): Promise<{ success: boolean; executed: number; errors: string[] }> {
   if (!force && isSchemaEnsured) return { success: true, executed: 0, errors: [] };
@@ -56,12 +59,42 @@ export async function ensureDatabaseSchema(force = false): Promise<{ success: bo
   const errors: string[] = [];
   let executedCount = 0;
 
+  const rawUrl = process.env.DATABASE_URL;
+  if (rawUrl && !rawUrl.includes("127.0.0.1") && !rawUrl.includes("localhost")) {
+    const directUrl = rawUrl.replace("-pooler", "");
+    const client = new Client({
+      connectionString: directUrl,
+      ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 10000,
+    });
+
+    try {
+      await client.connect();
+      for (const stmt of DDL_STATEMENTS) {
+        try {
+          await client.query(stmt);
+          executedCount++;
+        } catch (err: any) {
+          errors.push(`[${stmt.slice(0, 30)}]: ${err?.message || String(err)}`);
+        }
+      }
+      await client.end();
+      isEnsuring = false;
+      isSchemaEnsured = true;
+      return { success: errors.length === 0, executed: executedCount, errors };
+    } catch (connErr: any) {
+      errors.push(`[Direct pg connection]: ${connErr?.message || String(connErr)}`);
+      try { await client.end(); } catch {}
+    }
+  }
+
+  // Fallback qua Prisma
   for (const stmt of DDL_STATEMENTS) {
     try {
       await prisma.$executeRawUnsafe(stmt);
       executedCount++;
     } catch (err: any) {
-      errors.push(`[${stmt.slice(0, 40)}...]: ${err?.message || String(err)}`);
+      errors.push(`[${stmt.slice(0, 30)}]: ${err?.message || String(err)}`);
     }
   }
 
