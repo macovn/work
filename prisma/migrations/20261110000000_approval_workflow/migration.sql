@@ -1,0 +1,49 @@
+-- AlterEnum Role
+ALTER TYPE "Role" ADD VALUE IF NOT EXISTS 'DIRECTOR';
+ALTER TYPE "Role" ADD VALUE IF NOT EXISTS 'DEPUTY_DIRECTOR';
+ALTER TYPE "Role" ADD VALUE IF NOT EXISTS 'DEPARTMENT_HEAD';
+
+-- CreateEnum ApprovalStatus
+DO $$ BEGIN
+    CREATE TYPE "ApprovalStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- AlterTable Task: add workflow, evidence & KPI fields
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "taskSource" TEXT;
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "approvalStatus" "ApprovalStatus" DEFAULT 'APPROVED';
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "approverId" TEXT;
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "approvedAt" TIMESTAMP(3);
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "approvalNote" TEXT;
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "createdById" TEXT;
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "evidenceFiles" TEXT;
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "selfKpiQuantity" DOUBLE PRECISION;
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "selfKpiProgress" DOUBLE PRECISION;
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "selfKpiQuality" DOUBLE PRECISION;
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "selfKpiScore" DOUBLE PRECISION;
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "selfKpiComment" TEXT;
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "selfKpiEvaluatedAt" TIMESTAMP(3);
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "directorEvidence" TEXT;
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "directorComment" TEXT;
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "directorAdjusterId" TEXT;
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "directorAdjustedAt" TIMESTAMP(3);
+
+-- Add foreign key constraints safely
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Task_approverId_fkey') THEN
+        ALTER TABLE "Task" ADD CONSTRAINT "Task_approverId_fkey" FOREIGN KEY ("approverId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+    END IF;
+END $$;
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Task_createdById_fkey') THEN
+        ALTER TABLE "Task" ADD CONSTRAINT "Task_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+    END IF;
+END $$;
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Task_directorAdjusterId_fkey') THEN
+        ALTER TABLE "Task" ADD CONSTRAINT "Task_directorAdjusterId_fkey" FOREIGN KEY ("directorAdjusterId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+    END IF;
+END $$;

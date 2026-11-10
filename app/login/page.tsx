@@ -25,7 +25,7 @@ export default function LoginPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Đăng nhập thất bại");
+        setError(data.detail ? `${data.error} (${data.detail})` : (data.error || "Đăng nhập thất bại"));
         setLoading(false);
         return;
       }
