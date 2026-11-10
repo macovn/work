@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { verifyPassword, signToken, setAuthCookie } from "@/lib/auth";
 import { NotificationEngine } from "@/lib/notification-engine";
 import { checkRateLimit, resetRateLimit, getClientIp } from "@/lib/rate-limit";
+import { ensureDatabaseSchema } from "@/lib/db-schema-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
       );
     }
 
+    await ensureDatabaseSchema();
     const user = await prisma.user.findUnique({
       where: { email: normalizedEmail },
     });
