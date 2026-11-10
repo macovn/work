@@ -74,11 +74,19 @@ export async function GET(request: Request) {
           ...baseWhere,
           status: { notIn: ["CANCELLED"] },
         },
-        include: {
+        select: {
+          id: true,
+          code: true,
+          title: true,
+          field: true,
+          assigneeId: true,
+          deadline: true,
+          priority: true,
+          taskType: true,
+          status: true,
+          result: true,
+          notes: true,
           assignee: {
-            select: { id: true, fullName: true, email: true },
-          },
-          kpiEvaluator: {
             select: { id: true, fullName: true, email: true },
           },
         },
