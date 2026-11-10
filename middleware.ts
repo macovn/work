@@ -27,6 +27,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/api/auth/login") ||
     pathname.startsWith("/api/auth/google") ||
     pathname.startsWith("/api/cron") ||
+    pathname.startsWith("/api/health") ||
     pathname.startsWith("/_next") ||
     isStaticAsset(pathname)
   ) {
