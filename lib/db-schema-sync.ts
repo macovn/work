@@ -48,16 +48,18 @@ const DDL_STATEMENTS = [
  * các cột và enum mới nhất, bảo vệ hệ thống khỏi lỗi P2022 (missing column)
  * khi chạy trên môi trường serverless/Vercel.
  */
-export async function ensureDatabaseSchema(): Promise<{ success: boolean; errors: string[] }> {
-  if (isSchemaEnsured) return { success: true, errors: [] };
-  if (isEnsuring) return { success: false, errors: ["Already in progress"] };
+export async function ensureDatabaseSchema(force = false): Promise<{ success: boolean; executed: number; errors: string[] }> {
+  if (!force && isSchemaEnsured) return { success: true, executed: 0, errors: [] };
+  if (isEnsuring) return { success: false, executed: 0, errors: ["Already in progress"] };
   isEnsuring = true;
 
   const errors: string[] = [];
+  let executedCount = 0;
 
   for (const stmt of DDL_STATEMENTS) {
     try {
       await prisma.$executeRawUnsafe(stmt);
+      executedCount++;
     } catch (err: any) {
       errors.push(`[${stmt.slice(0, 40)}...]: ${err?.message || String(err)}`);
     }
@@ -66,5 +68,5 @@ export async function ensureDatabaseSchema(): Promise<{ success: boolean; errors
   isEnsuring = false;
   isSchemaEnsured = true;
 
-  return { success: errors.length === 0, errors };
+  return { success: errors.length === 0, executed: executedCount, errors };
 }

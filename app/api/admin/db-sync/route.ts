@@ -18,6 +18,8 @@ async function handleSync(request: Request) {
     const token = url.searchParams.get("token");
     const isTokenValid = token === "cai-bau-sync-2026";
 
+    const force = url.searchParams.get("force") !== "false"; // mặc định force = true khi gọi endpoint admin này
+
     if (!isTokenValid) {
       const user = await getCurrentUser();
       if (!user || user.role !== "ADMIN") {
@@ -25,7 +27,7 @@ async function handleSync(request: Request) {
       }
     }
 
-    const result = await ensureDatabaseSchema();
+    const result = await ensureDatabaseSchema(force);
     return NextResponse.json(result);
   } catch (error: any) {
     return NextResponse.json(
