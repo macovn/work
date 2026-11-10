@@ -20,19 +20,23 @@ function formatDatabaseUrl(rawUrl: string | undefined): string | undefined {
         parts[0] = `${parts[0]}-pooler`;
         url.hostname = parts.join(".");
       }
-      // 2. Tăng connect_timeout lên 30s để chờ Neon compute khởi động khi cold-start
+      // 2. Connect timeout 15s (đủ cho cold-start mà không treo pool)
       if (!url.searchParams.has("connect_timeout")) {
-        url.searchParams.set("connect_timeout", "30");
+        url.searchParams.set("connect_timeout", "15");
       }
-      // 3. Đảm bảo pool_timeout 30s
+      // 3. Pool timeout 15s
       if (!url.searchParams.has("pool_timeout")) {
-        url.searchParams.set("pool_timeout", "30");
+        url.searchParams.set("pool_timeout", "15");
       }
-      // 4. Đảm bảo sslmode=require
+      // 4. connection_limit=3 cho serverless function để tránh cạn kiệt Neon pooler
+      if (!url.searchParams.has("connection_limit")) {
+        url.searchParams.set("connection_limit", "3");
+      }
+      // 5. Đảm bảo sslmode=require
       if (!url.searchParams.has("sslmode")) {
         url.searchParams.set("sslmode", "require");
       }
-      // 5. Đánh dấu pgbouncer=true để Prisma tương thích tốt với PgBouncer transaction mode
+      // 6. Đánh dấu pgbouncer=true để Prisma tương thích tốt với PgBouncer transaction mode
       if (!url.searchParams.has("pgbouncer")) {
         url.searchParams.set("pgbouncer", "true");
       }
@@ -67,4 +71,6 @@ export const prisma =
     },
   });
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+// Luôn tái sử dụng singleton instance trong globalThis (cả dev và serverless production)
+// để tránh rò rỉ connection pool giữa các import
+globalForPrisma.prisma = prisma;

@@ -8,7 +8,6 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    await ensureDatabaseSchema();
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

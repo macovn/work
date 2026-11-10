@@ -55,9 +55,7 @@ export async function ensureDatabaseSchema(): Promise<{ success: boolean; errors
   }
 
   isEnsuring = false;
-  if (errors.length === 0) {
-    isSchemaEnsured = true;
-  }
+  isSchemaEnsured = true;
 
   return { success: errors.length === 0, errors };
 }

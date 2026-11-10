@@ -49,7 +49,6 @@ export async function POST(request: Request) {
       );
     }
 
-    await ensureDatabaseSchema();
     const user = await prisma.user.findUnique({
       where: { email: normalizedEmail },
     });
