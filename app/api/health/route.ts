@@ -1,35 +1,44 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ensureDatabaseSchema } from "@/lib/db-schema-sync";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const start = Date.now();
   try {
-    const syncResult = await ensureDatabaseSchema();
-    const userCount = await prisma.user.count();
-    const durationMs = Date.now() - start;
+    const rawColumns: any[] = await prisma.$queryRawUnsafe(`
+      SELECT table_schema, column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'User'
+      ORDER BY ordinal_position;
+    `);
+
+    // Thử chạy trực tiếp ALTER TABLE
+    let alterResult = "not attempted";
+    try {
+      const res = await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "department" TEXT;`);
+      alterResult = `Executed, rows affected: ${res}`;
+    } catch (e: any) {
+      alterResult = `Error: ${e?.message}`;
+    }
+
+    const currentSchema: any[] = await prisma.$queryRawUnsafe(`
+      SELECT current_schema(), current_database(), current_user;
+    `);
+
     return NextResponse.json({
       status: "ok",
-      database: "connected",
-      userCount,
-      schemaSync: syncResult,
-      latencyMs: durationMs,
-      timestamp: new Date().toISOString(),
+      currentSchema,
+      alterResult,
+      columns: rawColumns.map((c) => `${c.table_schema}.${c.column_name} (${c.data_type})`),
     });
   } catch (error: any) {
-    const durationMs = Date.now() - start;
     return NextResponse.json(
       {
         status: "error",
-        database: "unreachable",
         error: error?.message || String(error),
         code: error?.code,
-        latencyMs: durationMs,
-        timestamp: new Date().toISOString(),
       },
-      { status: 503 }
+      { status: 500 }
     );
   }
 }
