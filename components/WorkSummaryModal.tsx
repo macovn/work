@@ -109,7 +109,7 @@ export function WorkSummaryModal({ isOpen, onClose }: WorkSummaryModalProps) {
       const res = await fetch("/api/tasks/work-summary");
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.error || "Không thể tải dữ liệu tổng hợp công việc");
+        throw new Error(errData.detail ? `${errData.error} (${errData.detail})` : (errData.error || "Không thể tải dữ liệu tổng hợp công việc"));
       }
       const summaryData: SummaryData = await res.json();
       setData(summaryData);

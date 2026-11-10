@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { startOfLocalDay, endOfLocalDay } from "@/lib/utils";
+import { ensureDatabaseSchema } from "@/lib/db-schema-sync";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
+    await ensureDatabaseSchema();
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -231,7 +233,11 @@ export async function GET(request: Request) {
   } catch (error: any) {
     console.error("[Work Summary API Error]:", error);
     return NextResponse.json(
-      { error: "Lỗi khi lấy bảng tổng hợp công việc" },
+      {
+        error: "Lỗi khi lấy bảng tổng hợp công việc",
+        detail: error?.message || String(error),
+        code: error?.code,
+      },
       { status: 500 }
     );
   }
