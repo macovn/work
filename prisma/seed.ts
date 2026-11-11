@@ -330,7 +330,7 @@ export async function runSeed() {
     {
       stdCode: "CV.TYT.002",
       code: "TYT-2026-006",
-      title: "Điều hành hoạt động chuyên môn Điểm trạm 1 (Đông Xá) và báo cáo kết quả công tác Chi bộ 2",
+      title: "Điều hành hoạt động chuyên môn Điểm trạm 1 (Đoàn Kết) và báo cáo kết quả công tác Chi bộ 2",
       field: "Điều hành Điểm trạm & Công tác Đảng",
       assignee: bsPhuongThao,
       deadline: addHours(72),

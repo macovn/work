@@ -136,10 +136,10 @@ export const TYT_CAI_BAU_SUMMARY = {
   locations: [
     "Trạm chính (Khu 5, Cái Rồng)",
     "Cơ sở điều trị Methadone (365 ngày/năm)",
-    "Điểm trạm 1 (Đông Xá)",
+    "Điểm trạm 1 (Đoàn Kết)",
     "Điểm trạm 2 (Hạ Long)",
-    "Điểm trạm 3 (Bình Dân - Đoàn Kết)",
-    "Điểm trạm 4 (Đài Xuyên - Vạn Yên)",
+    "Điểm trạm 3 (Đài Xuyên)",
+    "Điểm trạm 4 (Vạn Yên)",
   ],
   totalMissionsA1: 25,
   totalWorkItemsA2: 26,

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Plus, Lock, Unlock, Edit, X, Search, Building2, Briefcase } from "lucide-react";
 import { Role } from "@prisma/client";
+import { formatWorkLocation } from "@/lib/utils";
 import {
   ROLE_LABELS,
   ROLE_SHORT_LABELS,
@@ -276,10 +277,10 @@ export default function UsersPage() {
           <option value="">-- Tất cả điểm công tác --</option>
           <option value="Trạm chính">Trạm chính</option>
           <option value="Cơ sở Methadone">Cơ sở Methadone</option>
-          <option value="Điểm trạm 1">Điểm trạm 1 (Đông Xá)</option>
+          <option value="Điểm trạm 1">Điểm trạm 1 (Đoàn Kết)</option>
           <option value="Điểm trạm 2">Điểm trạm 2 (Hạ Long)</option>
-          <option value="Điểm trạm 3">Điểm trạm 3 (Bình Dân - Đoàn Kết)</option>
-          <option value="Điểm trạm 4">Điểm trạm 4 (Đài Xuyên - Vạn Yên)</option>
+          <option value="Điểm trạm 3">Điểm trạm 3 (Đài Xuyên)</option>
+          <option value="Điểm trạm 4">Điểm trạm 4 (Vạn Yên)</option>
         </select>
 
         <select
@@ -363,7 +364,7 @@ export default function UsersPage() {
                       <td className="p-3.5 whitespace-nowrap">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 font-semibold text-[11px]">
                           <Building2 className="w-3 h-3 text-gray-500" />
-                          {u.workLocation || "Trạm chính"}
+                          {formatWorkLocation(u.workLocation)}
                         </span>
                       </td>
                       <td className="p-3.5 text-center font-mono">
@@ -507,10 +508,10 @@ export default function UsersPage() {
                   >
                     <option value="Trạm chính">Trạm chính</option>
                     <option value="Cơ sở Methadone">Cơ sở Methadone</option>
-                    <option value="Điểm trạm 1">Điểm trạm 1 (Đông Xá)</option>
+                    <option value="Điểm trạm 1">Điểm trạm 1 (Đoàn Kết)</option>
                     <option value="Điểm trạm 2">Điểm trạm 2 (Hạ Long)</option>
-                    <option value="Điểm trạm 3">Điểm trạm 3 (Bình Dân - Đoàn Kết)</option>
-                    <option value="Điểm trạm 4">Điểm trạm 4 (Đài Xuyên - Vạn Yên)</option>
+                    <option value="Điểm trạm 3">Điểm trạm 3 (Đài Xuyên)</option>
+                    <option value="Điểm trạm 4">Điểm trạm 4 (Vạn Yên)</option>
                   </select>
                 </div>
               </div>

@@ -28,6 +28,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { formatWorkLocation } from "@/lib/utils";
 import { canViewVtvlAndReports, isLeadership } from "@/lib/permissions";
 
 export default function VtvlPage() {
@@ -959,10 +960,10 @@ export default function VtvlPage() {
                   <option value="">Tất cả điểm công tác ({TYT_STAFF_D1.length})</option>
                   <option value="Trạm chính">Trạm chính</option>
                   <option value="Cơ sở Methadone">Cơ sở Methadone</option>
-                  <option value="Điểm trạm 1">Điểm trạm 1</option>
-                  <option value="Điểm trạm 2">Điểm trạm 2</option>
-                  <option value="Điểm trạm 3">Điểm trạm 3</option>
-                  <option value="Điểm trạm 4">Điểm trạm 4</option>
+                  <option value="Điểm trạm 1">Điểm trạm 1 (Đoàn Kết)</option>
+                  <option value="Điểm trạm 2">Điểm trạm 2 (Hạ Long)</option>
+                  <option value="Điểm trạm 3">Điểm trạm 3 (Đài Xuyên)</option>
+                  <option value="Điểm trạm 4">Điểm trạm 4 (Vạn Yên)</option>
                 </select>
 
                 <select
@@ -1010,7 +1011,7 @@ export default function VtvlPage() {
                       <td className="py-2.5 px-3 whitespace-nowrap">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 font-medium text-[11px]">
                           <Building2 className="w-3 h-3 text-gray-500" />
-                          {s.workLocation}
+                          {formatWorkLocation(s.workLocation)}
                         </span>
                       </td>
                       <td className="py-2.5 px-3">

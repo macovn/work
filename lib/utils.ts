@@ -188,3 +188,18 @@ export async function fetchAllTaskRows(base: URLSearchParams = new URLSearchPara
   }
   return rows;
 }
+
+
+export const WORK_LOCATION_LABELS: Record<string, string> = {
+  "Trạm chính": "Trạm chính",
+  "Cơ sở Methadone": "Cơ sở Methadone",
+  "Điểm trạm 1": "Điểm trạm 1 (Đoàn Kết)",
+  "Điểm trạm 2": "Điểm trạm 2 (Hạ Long)",
+  "Điểm trạm 3": "Điểm trạm 3 (Đài Xuyên)",
+  "Điểm trạm 4": "Điểm trạm 4 (Vạn Yên)",
+};
+
+export function formatWorkLocation(loc?: string | null): string {
+  if (!loc) return "Trạm chính";
+  return WORK_LOCATION_LABELS[loc] || loc;
+}
