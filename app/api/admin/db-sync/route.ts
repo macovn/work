@@ -1,3 +1,4 @@
+import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
@@ -29,6 +30,24 @@ async function handleSync(request: Request) {
     }
 
     const action = url.searchParams.get("action");
+    if (action === "reset-admin") {
+      const hash = await bcrypt.hash("admin123", 10);
+      const admin = await prisma.user.upsert({
+        where: { email: "admin@example.com" },
+        update: { passwordHash: hash, role: "ADMIN", status: "ACTIVE" },
+        create: {
+          email: "admin@example.com",
+          fullName: "Phạm Huy Cường",
+          passwordHash: hash,
+          role: "ADMIN",
+          status: "ACTIVE",
+          department: "Văn phòng",
+          workLocation: "Trạm chính",
+        },
+      });
+      return NextResponse.json({ success: true, email: admin.email, role: admin.role });
+    }
+
 
     if (action === "users") {
       const users = await prisma.user.findMany({
