@@ -375,7 +375,7 @@ export default function VtvlPage() {
       "Nhiệm vụ kiêm nhiệm / Ghi chú": s.concurrentRole,
     }));
     const wsD1 = XLSX.utils.json_to_sheet(d1Rows);
-    XLSX.utils.book_append_sheet(wb, wsD1, "D1_67VienChuc_TYT");
+    XLSX.utils.book_append_sheet(wb, wsD1, "D1_VienChuc_TYT");
 
     // Sheet 5: QĐ 1399 (22 VTVL Y tế)
     const qdRows = QD1399_22_POSITIONS_REFERENCE.map((q) => ({
@@ -541,7 +541,7 @@ export default function VtvlPage() {
             }`}
           >
             <Users className="w-4 h-4" />
-            3. Biểu D1: Danh sách 67 Viên chức &amp; Quỹ giờ 1.904h
+            3. Biểu D1: Danh sách {TYT_STAFF_D1.length} Viên chức &amp; Quỹ giờ 1.904h
           </button>
 
           <button
@@ -933,7 +933,7 @@ export default function VtvlPage() {
             <div className="p-5 border-b border-gray-100 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
               <div>
                 <h2 className="text-base font-bold text-gray-900">
-                  Biểu D1: Danh sách 67 Viên chức hiện có tại Trạm Y tế Cái Bầu &amp; Phân bổ Quỹ giờ 1.904 giờ/năm
+                  Biểu D1: Danh sách {TYT_STAFF_D1.length} Viên chức hiện có tại Trạm Y tế Cái Bầu &amp; Phân bổ Quỹ giờ 1.904 giờ/năm
                 </h2>
                 <p className="text-xs text-gray-500 mt-0.5">
                   Số liệu chốt thời điểm 30/9/2026 &bull; Phân bổ tại Trạm chính, Cơ sở điều trị Methadone và 04 Điểm trạm

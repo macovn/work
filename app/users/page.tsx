@@ -299,7 +299,7 @@ export default function UsersPage() {
 
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-sm text-gray-500">Đang tải danh sách 67 viên chức Trạm Y tế Cái Bầu...</div>
+          <div className="p-8 text-center text-sm text-gray-500">Đang tải danh sách viên chức Trạm Y tế Cái Bầu...</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
